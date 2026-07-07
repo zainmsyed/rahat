@@ -69,6 +69,14 @@ make web
 
 The web app starts on `http://localhost:5173` by default.
 
+### 4. Run the local verification target
+
+```bash
+make ci
+```
+
+This runs backend tests plus the frontend install, check, and production build steps from a clean dependency state.
+
 ## Verification
 
 Once both services are running, confirm the workspace bootstraps correctly:

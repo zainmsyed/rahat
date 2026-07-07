@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -15,19 +16,14 @@ func OpenSQLite(ctx context.Context, databasePath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", databasePath)
+	db, err := sql.Open("sqlite", sqliteDSN(databasePath))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
 
-	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode = WAL;"); err != nil {
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode;"); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("enable wal mode: %w", err)
-	}
-
-	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON;"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("enable foreign keys: %w", err)
+		return nil, fmt.Errorf("verify sqlite pragmas: %w", err)
 	}
 
 	if _, err := db.ExecContext(ctx, `
@@ -47,4 +43,21 @@ func OpenSQLite(ctx context.Context, databasePath string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func sqliteDSN(databasePath string) string {
+	query := url.Values{}
+	query.Add("_pragma", "journal_mode(WAL)")
+	query.Add("_pragma", "foreign_keys(ON)")
+
+	absolutePath, err := filepath.Abs(databasePath)
+	if err != nil {
+		absolutePath = databasePath
+	}
+
+	return (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(absolutePath),
+		RawQuery: query.Encode(),
+	}).String()
 }

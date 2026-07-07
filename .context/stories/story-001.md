@@ -1,10 +1,10 @@
 # Story 001: Bootstrap the Rahat app workspace
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** platform  
 **Created:** 2026-07-07  
 **Last accessed:** 2026-07-07  
-**Completed:** —
+**Completed:** 2026-07-07
 
 ---
 

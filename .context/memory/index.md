@@ -16,3 +16,16 @@
 .pi/lib/vazir-vcs-helpers.ts — Tracker-side VCS guards, checkpoints, milestones, and change syncing
 .pi/skills/vazir-base/SKILL.md — Vazir baseline skill instructions
 AGENTS.md — Cross-framework project guidance and working notes
+
+cmd/server/main.go — (undescribed)
+internal/app/app.go — (undescribed)
+internal/config/config.go — (undescribed)
+internal/db/sqlite.go — (undescribed)
+web/package-lock.json — (undescribed)
+web/package.json — (undescribed)
+web/src/app.d.ts — (undescribed)
+web/src/app.html — (undescribed)
+web/src/routes/+page.svelte — (undescribed)
+web/svelte.config.js — (undescribed)
+web/tsconfig.json — (undescribed)
+web/vite.config.ts — (undescribed)
