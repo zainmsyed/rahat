@@ -7,7 +7,6 @@ type Channel string
 const (
 	ChannelTelegram Channel = "telegram"
 	ChannelEmail    Channel = "email"
-	ChannelSMS      Channel = "sms"
 )
 
 type Preference struct {

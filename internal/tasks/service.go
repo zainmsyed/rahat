@@ -1,6 +1,9 @@
 package tasks
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type Service struct {
 	repo *Repository
@@ -11,19 +14,30 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) CreateTaskWithSubtasks(ctx context.Context, task Task, subtasks []Subtask) (TaskWithSubtasks, error) {
-	createdTask, err := s.repo.CreateTask(ctx, task)
+	tx, err := s.repo.db.BeginTx(ctx, nil)
 	if err != nil {
+		return TaskWithSubtasks{}, fmt.Errorf("begin task create transaction: %w", err)
+	}
+
+	createdTask, err := createTask(ctx, tx, task)
+	if err != nil {
+		_ = tx.Rollback()
 		return TaskWithSubtasks{}, err
 	}
 
 	createdSubtasks := make([]Subtask, 0, len(subtasks))
 	for _, subtask := range subtasks {
 		subtask.TaskID = createdTask.ID
-		createdSubtask, err := s.repo.CreateSubtask(ctx, subtask)
+		createdSubtask, err := createSubtask(ctx, tx, subtask)
 		if err != nil {
+			_ = tx.Rollback()
 			return TaskWithSubtasks{}, err
 		}
 		createdSubtasks = append(createdSubtasks, createdSubtask)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return TaskWithSubtasks{}, fmt.Errorf("commit task create transaction: %w", err)
 	}
 
 	return TaskWithSubtasks{Task: createdTask, Subtasks: createdSubtasks}, nil

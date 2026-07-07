@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS channel_preferences (
     recap_enabled INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    CHECK (channel IN ('telegram', 'email', 'sms')),
+    CHECK (channel IN ('telegram', 'email')),
     UNIQUE(user_id, channel)
 );
 
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS event_logs (
     message_type TEXT NOT NULL,
     payload_json TEXT NOT NULL DEFAULT '{}',
     occurred_at TEXT NOT NULL,
-    CHECK (channel IN ('telegram', 'email', 'sms', 'system'))
+    CHECK (channel IN ('telegram', 'email', 'system'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_logs_user_time ON event_logs(user_id, occurred_at DESC);

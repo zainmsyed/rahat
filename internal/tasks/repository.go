@@ -10,6 +10,12 @@ import (
 	"github.com/rahat/rahat/internal/store"
 )
 
+type dbExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
 type Repository struct {
 	db *sql.DB
 }
@@ -19,6 +25,10 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 func (r *Repository) CreateTask(ctx context.Context, task Task) (Task, error) {
+	return createTask(ctx, r.db, task)
+}
+
+func createTask(ctx context.Context, exec dbExecutor, task Task) (Task, error) {
 	now := time.Now().UTC()
 	if task.ID == "" {
 		task.ID = store.NewID()
@@ -30,7 +40,7 @@ func (r *Repository) CreateTask(ctx context.Context, task Task) (Task, error) {
 		task.UpdatedAt = now
 	}
 
-	if _, err := r.db.ExecContext(ctx, `
+	if _, err := exec.ExecContext(ctx, `
 		INSERT INTO tasks (id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, task.ID, task.UserID, task.Name, task.Description, task.DurationMinutes, task.CadenceType, task.CadenceValue, task.Priority, task.TimeOfDayPreference, task.IsMultistep, task.IsPaused, store.FormatTime(task.CreatedAt), store.FormatTime(task.UpdatedAt)); err != nil {
@@ -118,6 +128,10 @@ func (r *Repository) ListTasksByUser(ctx context.Context, userID string) ([]Task
 }
 
 func (r *Repository) CreateSubtask(ctx context.Context, subtask Subtask) (Subtask, error) {
+	return createSubtask(ctx, r.db, subtask)
+}
+
+func createSubtask(ctx context.Context, exec dbExecutor, subtask Subtask) (Subtask, error) {
 	if subtask.ID == "" {
 		subtask.ID = store.NewID()
 	}
@@ -125,7 +139,7 @@ func (r *Repository) CreateSubtask(ctx context.Context, subtask Subtask) (Subtas
 		subtask.CreatedAt = time.Now().UTC()
 	}
 
-	if _, err := r.db.ExecContext(ctx, `
+	if _, err := exec.ExecContext(ctx, `
 		INSERT INTO subtasks (id, task_id, step_order, name, duration_minutes, time_of_day_preference, min_gap_after_previous_minutes, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, subtask.ID, subtask.TaskID, subtask.StepOrder, subtask.Name, subtask.DurationMinutes, subtask.TimeOfDayPreference, subtask.GapRule.MinGapAfterPreviousMinutes, store.FormatTime(subtask.CreatedAt)); err != nil {

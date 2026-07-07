@@ -26,6 +26,21 @@ func TestOpenSQLiteBootstrapsDatabase(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("schema_migrations query failed: %v", err)
 	}
+
+	assertTableExists(t, db, "tasks")
+	assertTableExists(t, db, "starter_task_templates")
+}
+
+func assertTableExists(t *testing.T, db *sql.DB, tableName string) {
+	t.Helper()
+
+	var count int
+	if err := db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", tableName).Scan(&count); err != nil {
+		t.Fatalf("table existence query for %s failed: %v", tableName, err)
+	}
+	if count != 1 {
+		t.Fatalf("table %s exists count = %d, want 1", tableName, count)
+	}
 }
 
 func assertPragmaEquals(t *testing.T, db *sql.DB, pragma string, want any) {

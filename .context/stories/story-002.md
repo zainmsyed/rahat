@@ -1,10 +1,10 @@
 # Story 002: Model tasks, occurrences, channels, and event history
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** backend  
 **Created:** 2026-07-07  
 **Last accessed:** 2026-07-07  
-**Completed:** —
+**Completed:** 2026-07-07
 
 ---
 

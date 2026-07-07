@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rahat/rahat/internal/store"
 	_ "modernc.org/sqlite"
 )
 
@@ -35,6 +36,11 @@ func OpenSQLite(ctx context.Context, databasePath string) (*sql.DB, error) {
 	`); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create bootstrap table: %w", err)
+	}
+
+	if err := store.ApplyMigrations(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("apply sqlite migrations: %w", err)
 	}
 
 	if err := db.PingContext(ctx); err != nil {

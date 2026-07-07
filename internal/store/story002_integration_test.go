@@ -211,6 +211,54 @@ func TestStory002PersistenceFlow(t *testing.T) {
 	}
 }
 
+func TestCreateTaskWithSubtasksRollsBackOnFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+
+	userService := users.NewService(users.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+
+	user, err := userService.Create(ctx, users.User{
+		DisplayName:            "Rollback Test",
+		Timezone:               "UTC",
+		DailyTimeBudgetMinutes: 30,
+	})
+	if err != nil {
+		t.Fatalf("Create user error = %v", err)
+	}
+
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{
+		UserID:              user.ID,
+		Name:                "Broken laundry",
+		DurationMinutes:     10,
+		CadenceType:         tasks.CadenceTypeInterval,
+		CadenceValue:        1,
+		Priority:            tasks.PriorityLow,
+		TimeOfDayPreference: tasks.TimeOfDayMorning,
+		IsMultistep:         true,
+	}, []tasks.Subtask{
+		{Name: "First", StepOrder: 1, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayMorning},
+		{Name: "Duplicate order", StepOrder: 1, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayMorning},
+	})
+	if err == nil {
+		t.Fatal("CreateTaskWithSubtasks() error = nil, want unique-constraint failure")
+	}
+
+	listedTasks, err := taskService.ListTasksByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListTasksByUser() error = %v", err)
+	}
+	if len(listedTasks) != 0 {
+		t.Fatalf("len(listed tasks) after rollback = %d, want 0", len(listedTasks))
+	}
+}
+
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
