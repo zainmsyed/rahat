@@ -1,6 +1,6 @@
 # Story 001: Bootstrap the Rahat app workspace
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** platform  
 **Created:** 2026-07-07  
 **Last accessed:** 2026-07-07  
@@ -37,12 +37,12 @@ A developer can clone the repo, copy the env example, run the backend and web ap
 ---
 
 ## Checklist
-- [ ] Create the base repo layout for the Go backend, SvelteKit frontend, shared config, and docs
-- [ ] Add local development commands for running the API, web app, and SQLite setup
-- [ ] Wire SQLite initialization with WAL mode and a basic connection health check
-- [ ] Add a minimal HTTP server with health and readiness endpoints plus structured logging
-- [ ] Add frontend shell files so the web app boots with a placeholder Rahat page
-- [ ] Document required environment variables, local startup, and deployment assumptions
+- [x] Create the base repo layout for the Go backend, SvelteKit frontend, shared config, and docs
+- [x] Add local development commands for running the API, web app, and SQLite setup
+- [x] Wire SQLite initialization with WAL mode and a basic connection health check
+- [x] Add a minimal HTTP server with health and readiness endpoints plus structured logging
+- [x] Add frontend shell files so the web app boots with a placeholder Rahat page
+- [x] Document required environment variables, local startup, and deployment assumptions
 
 ---
 
@@ -51,3 +51,8 @@ A developer can clone the repo, copy the env example, run the backend and web ap
 ---
 
 ## Completion Summary
+- Bootstrapped the repo with a Go API entrypoint, shared config package, SQLite bootstrap helper, and HTTP app package.
+- Added SQLite initialization that creates the database path, enables WAL mode and foreign keys, creates a bootstrap table, and verifies connectivity.
+- Added `/healthz` and `/readyz` JSON endpoints with structured request logging via `log/slog`.
+- Created a SvelteKit frontend shell with a placeholder Rahat landing page linking to the backend health endpoints.
+- Added `Makefile` commands, `.env.example`, a backend `Dockerfile`, and README setup/deployment guidance so a developer can start both services locally.
