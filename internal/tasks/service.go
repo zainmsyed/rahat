@@ -63,6 +63,10 @@ func (s *Service) GetTaskWithSubtasks(ctx context.Context, taskID string) (TaskW
 	return TaskWithSubtasks{Task: task, Subtasks: subtasks}, nil
 }
 
+func (s *Service) ListTaskWithSubtasksByUser(ctx context.Context, userID string) ([]TaskWithSubtasks, error) {
+	return s.repo.ListTaskWithSubtasksByUser(ctx, userID)
+}
+
 func (s *Service) ListTasksByUser(ctx context.Context, userID string) ([]Task, error) {
 	return s.repo.ListTasksByUser(ctx, userID)
 }

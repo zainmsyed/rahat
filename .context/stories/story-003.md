@@ -1,10 +1,10 @@
 # Story 003: Build the daily scheduling engine
 
-**Status:** not-started  
+**Status:** complete  
 **Type:** backend  
 **Created:** 2026-07-07  
-**Last accessed:** 2026-07-07  
-**Completed:** —
+**Last accessed:** 2026-07-08  
+**Completed:** 2026-07-08
 
 ---
 
@@ -35,12 +35,12 @@ Deterministic tests show that sample task sets produce the expected daily schedu
 ---
 
 ## Checklist
-- [ ] Generate due occurrences from interval and weekly-count cadences using last completion data
-- [ ] Split each day’s task-time budget across morning, afternoon, and evening before fitting work
-- [ ] Place tasks and subtasks by priority, overdue order, time-of-day preference, and min-gap rules
-- [ ] Push overflow forward while tracking rollover counts, high-priority exceptions, and skip semantics
-- [ ] Persist the resulting daily schedule and next-checkpoint state for delivery channels to read
-- [ ] Add table-driven tests for normal days, overloaded days, and multistep examples like laundry
+- [x] Generate due occurrences from interval and weekly-count cadences using last completion data
+- [x] Split each day’s task-time budget across morning, afternoon, and evening before fitting work
+- [x] Place tasks and subtasks by priority, overdue order, time-of-day preference, and min-gap rules
+- [x] Push overflow forward while tracking rollover counts, high-priority exceptions, and skip semantics
+- [x] Persist the resulting daily schedule and next-checkpoint state for delivery channels to read
+- [x] Add table-driven tests for normal days, overloaded days, and multistep examples like laundry
 
 ---
 
@@ -49,3 +49,9 @@ Deterministic tests show that sample task sets produce the expected daily schedu
 ---
 
 ## Completion Summary
+- Added the scheduling engine in `internal/scheduler` to generate due task occurrences for interval and weekly-count cadences, merge backlog work, and produce a persisted day plan.
+- Added window helpers and schedule-checkpoint persistence so each generated day stores its next checkpoint time and scheduled occurrence count for downstream delivery code.
+- Implemented budget splitting across morning, afternoon, and evening, plus window-based fitting by priority, overdue age, and multistep subtask order.
+- Added rollover handling that forwards overflowed work, auto-skips non-high-priority occurrences once the rollover cap is hit, and preserves high-priority exceptions.
+- Extended task and occurrence services with list helpers needed by the scheduler and added a migration for schedule checkpoint storage.
+- Added table-driven scheduler tests covering a normal day, an overloaded day with rollover/skip behavior, and a multistep laundry plan spanning morning, afternoon, and evening.

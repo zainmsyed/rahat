@@ -30,9 +30,9 @@ func (r *Repository) Create(ctx context.Context, occurrence Occurrence) (Occurre
 	}
 
 	if _, err := r.db.ExecContext(ctx, `
-		INSERT INTO occurrences (id, user_id, task_id, subtask_id, status, scheduled_for_date, original_scheduled_for_date, scheduled_time_of_day, rollover_count, consecutive_no_count, snoozed_until_at, completed_at, skipped_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, occurrence.ID, occurrence.UserID, occurrence.TaskID, nullIfEmpty(occurrence.SubtaskID), occurrence.Status, occurrence.ScheduledForDate, occurrence.OriginalScheduledForDate, occurrence.ScheduledTimeOfDay, occurrence.RolloverCount, occurrence.ConsecutiveNoCount, nullableTime(occurrence.SnoozedUntilAt), nullableTime(occurrence.CompletedAt), nullableTime(occurrence.SkippedAt), store.FormatTime(occurrence.CreatedAt), store.FormatTime(occurrence.UpdatedAt)); err != nil {
+		INSERT INTO occurrences (id, user_id, task_id, subtask_id, status, scheduled_for_date, original_scheduled_for_date, scheduled_time_of_day, rollover_count, consecutive_no_count, snoozed_until_at, ready_at, completed_at, skipped_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, occurrence.ID, occurrence.UserID, occurrence.TaskID, nullIfEmpty(occurrence.SubtaskID), occurrence.Status, occurrence.ScheduledForDate, occurrence.OriginalScheduledForDate, occurrence.ScheduledTimeOfDay, occurrence.RolloverCount, occurrence.ConsecutiveNoCount, nullableTime(occurrence.SnoozedUntilAt), nullableTime(occurrence.ReadyAt), nullableTime(occurrence.CompletedAt), nullableTime(occurrence.SkippedAt), store.FormatTime(occurrence.CreatedAt), store.FormatTime(occurrence.UpdatedAt)); err != nil {
 		return Occurrence{}, fmt.Errorf("create occurrence: %w", err)
 	}
 
@@ -43,15 +43,16 @@ func (r *Repository) GetByID(ctx context.Context, id string) (Occurrence, error)
 	var occurrence Occurrence
 	var subtaskID sql.NullString
 	var snoozedUntilAt sql.NullString
+	var readyAt sql.NullString
 	var completedAt sql.NullString
 	var skippedAt sql.NullString
 	var createdAt string
 	var updatedAt string
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, task_id, subtask_id, status, scheduled_for_date, original_scheduled_for_date, scheduled_time_of_day, rollover_count, consecutive_no_count, snoozed_until_at, completed_at, skipped_at, created_at, updated_at
+		SELECT id, user_id, task_id, subtask_id, status, scheduled_for_date, original_scheduled_for_date, scheduled_time_of_day, rollover_count, consecutive_no_count, snoozed_until_at, ready_at, completed_at, skipped_at, created_at, updated_at
 		FROM occurrences
 		WHERE id = ?
-	`, id).Scan(&occurrence.ID, &occurrence.UserID, &occurrence.TaskID, &subtaskID, &occurrence.Status, &occurrence.ScheduledForDate, &occurrence.OriginalScheduledForDate, &occurrence.ScheduledTimeOfDay, &occurrence.RolloverCount, &occurrence.ConsecutiveNoCount, &snoozedUntilAt, &completedAt, &skippedAt, &createdAt, &updatedAt); err != nil {
+	`, id).Scan(&occurrence.ID, &occurrence.UserID, &occurrence.TaskID, &subtaskID, &occurrence.Status, &occurrence.ScheduledForDate, &occurrence.OriginalScheduledForDate, &occurrence.ScheduledTimeOfDay, &occurrence.RolloverCount, &occurrence.ConsecutiveNoCount, &snoozedUntilAt, &readyAt, &completedAt, &skippedAt, &createdAt, &updatedAt); err != nil {
 		return Occurrence{}, fmt.Errorf("get occurrence %s: %w", id, err)
 	}
 	occurrence.SubtaskID = subtaskID.String
@@ -60,6 +61,10 @@ func (r *Repository) GetByID(ctx context.Context, id string) (Occurrence, error)
 	occurrence.SnoozedUntilAt, err = store.ParseNullableTime(snoozedUntilAt)
 	if err != nil {
 		return Occurrence{}, fmt.Errorf("parse occurrence snoozed_until_at: %w", err)
+	}
+	occurrence.ReadyAt, err = store.ParseNullableTime(readyAt)
+	if err != nil {
+		return Occurrence{}, fmt.Errorf("parse occurrence ready_at: %w", err)
 	}
 	occurrence.CompletedAt, err = store.ParseNullableTime(completedAt)
 	if err != nil {
@@ -85,9 +90,9 @@ func (r *Repository) Update(ctx context.Context, occurrence Occurrence) (Occurre
 	occurrence.UpdatedAt = time.Now().UTC()
 	if _, err := r.db.ExecContext(ctx, `
 		UPDATE occurrences
-		SET status = ?, scheduled_for_date = ?, original_scheduled_for_date = ?, scheduled_time_of_day = ?, rollover_count = ?, consecutive_no_count = ?, snoozed_until_at = ?, completed_at = ?, skipped_at = ?, updated_at = ?
+		SET status = ?, scheduled_for_date = ?, original_scheduled_for_date = ?, scheduled_time_of_day = ?, rollover_count = ?, consecutive_no_count = ?, snoozed_until_at = ?, ready_at = ?, completed_at = ?, skipped_at = ?, updated_at = ?
 		WHERE id = ?
-	`, occurrence.Status, occurrence.ScheduledForDate, occurrence.OriginalScheduledForDate, occurrence.ScheduledTimeOfDay, occurrence.RolloverCount, occurrence.ConsecutiveNoCount, nullableTime(occurrence.SnoozedUntilAt), nullableTime(occurrence.CompletedAt), nullableTime(occurrence.SkippedAt), store.FormatTime(occurrence.UpdatedAt), occurrence.ID); err != nil {
+	`, occurrence.Status, occurrence.ScheduledForDate, occurrence.OriginalScheduledForDate, occurrence.ScheduledTimeOfDay, occurrence.RolloverCount, occurrence.ConsecutiveNoCount, nullableTime(occurrence.SnoozedUntilAt), nullableTime(occurrence.ReadyAt), nullableTime(occurrence.CompletedAt), nullableTime(occurrence.SkippedAt), store.FormatTime(occurrence.UpdatedAt), occurrence.ID); err != nil {
 		return Occurrence{}, fmt.Errorf("update occurrence %s: %w", occurrence.ID, err)
 	}
 	return r.GetByID(ctx, occurrence.ID)
@@ -98,6 +103,34 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("delete occurrence %s: %w", id, err)
 	}
 	return nil
+}
+
+func (r *Repository) ListByUser(ctx context.Context, userID string) ([]Occurrence, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id
+		FROM occurrences
+		WHERE user_id = ?
+		ORDER BY scheduled_for_date, id
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list occurrences for user %s: %w", userID, err)
+	}
+	defer rows.Close()
+
+	var occurrences []Occurrence
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan occurrence id: %w", err)
+		}
+		occurrence, err := r.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		occurrences = append(occurrences, occurrence)
+	}
+
+	return occurrences, rows.Err()
 }
 
 func (r *Repository) ListByTask(ctx context.Context, taskID string) ([]Occurrence, error) {

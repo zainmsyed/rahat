@@ -26,6 +26,10 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
 
+func (s *Service) ListByUser(ctx context.Context, userID string) ([]Occurrence, error) {
+	return s.repo.ListByUser(ctx, userID)
+}
+
 func (s *Service) ListByTask(ctx context.Context, taskID string) ([]Occurrence, error) {
 	return s.repo.ListByTask(ctx, taskID)
 }

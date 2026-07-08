@@ -27,6 +27,7 @@ type Occurrence struct {
 	RolloverCount            int
 	ConsecutiveNoCount       int
 	SnoozedUntilAt           *time.Time
+	ReadyAt                  *time.Time
 	CompletedAt              *time.Time
 	SkippedAt                *time.Time
 	CreatedAt                time.Time

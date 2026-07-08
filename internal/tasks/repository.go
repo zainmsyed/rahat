@@ -95,6 +95,23 @@ func (r *Repository) DeleteTask(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *Repository) ListTaskWithSubtasksByUser(ctx context.Context, userID string) ([]TaskWithSubtasks, error) {
+	tasksForUser, err := r.ListTasksByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]TaskWithSubtasks, 0, len(tasksForUser))
+	for _, task := range tasksForUser {
+		subtasks, err := r.ListSubtasksByTask(ctx, task.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, TaskWithSubtasks{Task: task, Subtasks: subtasks})
+	}
+	return result, nil
+}
+
 func (r *Repository) ListTasksByUser(ctx context.Context, userID string) ([]Task, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, created_at, updated_at
