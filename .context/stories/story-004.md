@@ -1,10 +1,10 @@
 # Story 004: Deliver Telegram reminders and adaptive check-ins
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** integration  
 **Created:** 2026-07-07  
 **Last accessed:** 2026-07-13  
-**Completed:** —
+**Completed:** 2026-07-13
 
 ---
 

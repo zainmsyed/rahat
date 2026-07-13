@@ -78,6 +78,8 @@ func TestShouldUseTelegramWebhook(t *testing.T) {
 		{name: "localhost", url: "https://localhost/webhooks/telegram", secret: "secret", want: false},
 		{name: "ip host", url: "https://127.0.0.1/webhooks/telegram", secret: "secret", want: false},
 		{name: "http only", url: "http://rahat.example.com/webhooks/telegram", secret: "secret", want: false},
+		{name: "wrong path", url: "https://rahat.example.com/telegram-hook", secret: "secret", want: false},
+		{name: "empty path", url: "https://rahat.example.com", secret: "secret", want: false},
 	}
 
 	for _, tc := range tests {

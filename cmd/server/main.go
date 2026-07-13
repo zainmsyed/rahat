@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -120,9 +121,11 @@ func main() {
 	logger.Info("server stopped")
 }
 
+const telegramWebhookPath = "/webhooks/telegram"
+
 func configureTelegramTransport(ctx context.Context, logger *slog.Logger, mux *http.ServeMux, bot ntg.RuntimeClient, webhookSecret, webhookURL string, handler ntg.CallbackHandler) string {
 	if shouldUseTelegramWebhook(webhookURL, webhookSecret) {
-		mux.Handle("/webhooks/telegram", webhooktg.NewHandler(webhookSecret, handler))
+		mux.Handle(telegramWebhookPath, webhooktg.NewHandler(webhookSecret, handler))
 		if err := bot.SetWebhook(ctx, webhookURL, webhookSecret); err == nil {
 			return "webhook"
 		} else {
@@ -152,6 +155,9 @@ func shouldUseTelegramWebhook(webhookURL, webhookSecret string) bool {
 		return false
 	}
 	if net.ParseIP(host) != nil {
+		return false
+	}
+	if path.Clean(parsed.Path) != telegramWebhookPath {
 		return false
 	}
 	return true

@@ -1,0 +1,17 @@
+{
+  "note": "Captured two reusable candidates from the story issue and review finding.",
+  "candidates": [
+    {
+      "text": "When an integration supports both webhooks and polling, default to the transport that works in local/dev without public infrastructure and enable webhook mode only when deployment settings clearly support it.",
+      "confidence": "high",
+      "sources": ["story issue"],
+      "rationale": "Story-004 had to be reframed mid-stream because webhook-first assumptions made development and testing harder than necessary; the successful path was long polling by default with webhook as an optional upgrade."
+    },
+    {
+      "text": "When runtime config accepts an external webhook URL, validate that the application actually serves the same webhook path or derive the served route from that URL before enabling webhook mode.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "The completion review found that accepting an arbitrary webhook URL path can silently point the provider at an unserved route; this is a reusable configuration-safety rule for webhook integrations."
+    }
+  ]
+}
