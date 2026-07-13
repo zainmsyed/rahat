@@ -6,7 +6,7 @@
 ---
 
 ## What we're building
-Rahat is a greenfield single-user assistant that schedules recurring household tasks around time budgets, calendar constraints, and stated priorities for overwhelmed parents, starting with new mothers and mothers with multiple young children. v1 uses a Go + SQLite backend, Telegram for the interactive daily loop with long polling as the default transport, email for overview/recap only, read-only Google Calendar integration, and a lightweight SvelteKit web flow for onboarding plus a passive today/tomorrow lookahead page.
+Rahat is a greenfield single-user assistant that schedules recurring household tasks around time budgets, calendar constraints, and stated priorities for overwhelmed parents, starting with new mothers and mothers with multiple young children. v1 uses a Go + SQLite backend, Telegram for the interactive daily loop with long polling as the default transport and webhook mode as an optional domain-backed upgrade, email for overview/recap only, read-only Google Calendar integration, and a lightweight SvelteKit web flow for onboarding plus a passive today/tomorrow lookahead page.
 
 ## What we're not building (v1 scope)
 - Multi-user household assignment
@@ -25,7 +25,7 @@ Establish the greenfield repo structure, runtime skeleton, SQLite persistence, a
 Implement the daily scheduling engine, cadence generation, window budgeting, overflow behavior, rollover caps, skip semantics, and Google Calendar read-only constraints. Implemented by Stories 003 and 005.
 
 ### Feature 3: Adaptive messaging loop
-Make Telegram the primary interactive surface for daily lists, reminders, check-ins, snoozes, reschedules, and pause actions, with long polling as the default v1 delivery path for easier development and testing, while keeping email as a non-interactive overview/recap channel. Webhooks remain optional deployment hardening rather than a baseline requirement. Implemented by Stories 004 and 008.
+Make Telegram the primary interactive surface for daily lists, reminders, check-ins, snoozes, reschedules, and pause actions, with long polling as the default v1 delivery path for easier development and testing, while keeping email as a non-interactive overview/recap channel. When deployment settings include a suitable public domain, Telegram webhook mode can be enabled; otherwise the app should continue on long polling. Implemented by Stories 004 and 008.
 
 ### Feature 4: Minimal web surfaces
 Provide a lightweight onboarding flow plus a passive today/tomorrow lookahead page without introducing a full dashboard. Implemented by Stories 006 and 007.
@@ -48,4 +48,4 @@ Add job wiring, telemetry, backups, and deployment/runbook support so the small 
 
 ## Replanning log
 - 2026-07-07: Initial plan created from the PRD plus clarified scope decisions: greenfield repo, Telegram as the interactive loop, email as recap-only, onboarding and read-only web view retained, SMS removed from v1.
-- 2026-07-12: Reframed Telegram transport expectations so long polling is the default v1 path for development, testing, and early deployment simplicity; webhooks are optional rather than required.
+- 2026-07-12: Reframed Telegram transport expectations so long polling is the default v1 path for development, testing, and early deployment simplicity; webhooks are optional and should be enabled only for domain-backed deployments, otherwise the app stays on long polling.
