@@ -35,7 +35,7 @@ func NewHTTPBotClient(token, baseURL string) *HTTPBotClient {
 	return &HTTPBotClient{
 		token:   token,
 		baseURL: strings.TrimRight(baseURL, "/"),
-		client:  &http.Client{Timeout: 15 * time.Second},
+		client:  &http.Client{Timeout: 45 * time.Second},
 	}
 }
 
