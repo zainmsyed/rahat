@@ -41,6 +41,8 @@ In a dev or staging Telegram chat, a tester can start the app without public web
 
 ## Checklist
 - [x] Support Telegram bot configuration with long polling as the default runtime path, and allow webhook mode only when deployment settings support it
+- [ ] Select Telegram transport at runtime: use webhook mode only when domain-backed webhook settings are present; otherwise fall back to long polling
+- [ ] Verify local/dev startup works end-to-end without public webhook infrastructure
 - [x] Send one batched morning message plus per-window task or subtask reminders from scheduled occurrences
 - [x] Capture Done and Not Yet responses and advance occurrence state correctly
 - [x] Implement consecutive-No check-ins with snooze, reschedule, and skip limits from the PRD
@@ -50,6 +52,7 @@ In a dev or staging Telegram chat, a tester can start the app without public web
 ---
 
 ## Issues
+- 2026-07-12: Story direction updated to keep Telegram long polling as the default path for development and early deployment, while allowing webhook mode only for users with domain-backed webhook infrastructure. Remaining implementation work should stay inside Story 004 and continue through the normal Vazir story review loop.
 
 ---
 
