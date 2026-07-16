@@ -1,0 +1,14 @@
+node_modules/
+.fallow/
+.local/
+.env
+.env.local
+.env.*.local
+*.local
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.temp
+*.swp
+var/

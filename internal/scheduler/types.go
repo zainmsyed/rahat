@@ -14,6 +14,8 @@ type PlanResult struct {
 	Skipped              []occurrences.Occurrence
 	Checkpoint           store.ScheduleCheckpoint
 	WindowBudgetsMinutes map[string]int
+	BlockedWindows       map[string][]string
+	SmallTaskOnlyReason  string
 }
 
 type Clock interface {

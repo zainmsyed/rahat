@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/rahat/rahat/internal/app"
+	calendarpkg "github.com/rahat/rahat/internal/calendar"
+	googcalendar "github.com/rahat/rahat/internal/calendar/google"
 	"github.com/rahat/rahat/internal/checkins"
 	"github.com/rahat/rahat/internal/config"
 	"github.com/rahat/rahat/internal/db"
@@ -22,6 +25,8 @@ import (
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
 	occ "github.com/rahat/rahat/internal/occurrences"
+	"github.com/rahat/rahat/internal/scheduler"
+	"github.com/rahat/rahat/internal/store"
 	taskpkg "github.com/rahat/rahat/internal/tasks"
 	usr "github.com/rahat/rahat/internal/users"
 	webhooktg "github.com/rahat/rahat/internal/webhooks/telegram"
@@ -55,6 +60,13 @@ func main() {
 	occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
 	eventService := events.NewService(events.NewRepository(sqlDB))
 	prefService := preferences.NewService(preferences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	calendarConnectionRepo := store.NewCalendarConnectionRepository(sqlDB)
+	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
+	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+	googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
+	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
 
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	webhookSecret := os.Getenv("TELEGRAM_WEBHOOK_SECRET")
@@ -97,6 +109,66 @@ func main() {
 	} else {
 		logger.Warn("telegram bot disabled: TELEGRAM_BOT_TOKEN not set")
 	}
+
+	mux.HandleFunc("GET /calendar/google/auth-url", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.URL.Query().Get("user_id")
+		if userID == "" {
+			http.Error(w, "missing user_id", http.StatusBadRequest)
+			return
+		}
+		if os.Getenv("GOOGLE_CLIENT_ID") == "" || os.Getenv("GOOGLE_CLIENT_SECRET") == "" || os.Getenv("GOOGLE_REDIRECT_URL") == "" {
+			http.Error(w, "google oauth not configured", http.StatusServiceUnavailable)
+			return
+		}
+		authURL, err := calendarService.GoogleAuthURL(r.Context(), userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"auth_url": authURL})
+	})
+	mux.HandleFunc("POST /calendar/google/connect", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+		code := r.URL.Query().Get("code")
+		if state == "" || code == "" {
+			http.Error(w, "missing state or code", http.StatusBadRequest)
+			return
+		}
+		connection, err := calendarService.ConnectGoogle(r.Context(), state, code)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, connection)
+	})
+	mux.HandleFunc("POST /calendar/google/sync", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.URL.Query().Get("user_id")
+		day := parseDay(r.URL.Query().Get("date"))
+		if userID == "" {
+			http.Error(w, "missing user_id", http.StatusBadRequest)
+			return
+		}
+		blocks, err := calendarService.SyncGoogleDay(r.Context(), userID, day)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"blocks": blocks})
+	})
+	mux.HandleFunc("GET /schedule/plan", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.URL.Query().Get("user_id")
+		day := parseDay(r.URL.Query().Get("date"))
+		if userID == "" {
+			http.Error(w, "missing user_id", http.StatusBadRequest)
+			return
+		}
+		result, err := schedulerService.PlanDay(r.Context(), userID, day)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	})
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -161,6 +233,12 @@ func shouldUseTelegramWebhook(webhookURL, webhookSecret string) bool {
 		return false
 	}
 	return true
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func parseDay(value string) time.Time {

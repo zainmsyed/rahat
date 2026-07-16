@@ -20,7 +20,7 @@ func TestPlanDayScenarios(t *testing.T) {
 
 	tests := []struct {
 		name                     string
-		seed                     func(context.Context, *testing.T, *sql.DB, *users.Service, *tasks.Service, *occurrences.Service) string
+		seed                     func(context.Context, *testing.T, *sql.DB, *users.Service, *tasks.Service, *occurrences.Service, *store.CalendarBlockRepository) string
 		day                      time.Time
 		wantScheduled            int
 		wantOverflowed           int
@@ -116,6 +116,62 @@ func TestPlanDayScenarios(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:                     "all-day large calendar block limits day to short tasks and explains blocked windows",
+			day:                      time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC),
+			seed:                     seedAllDayCalendarBlock,
+			wantScheduled:            1,
+			wantOverflowed:           1,
+			wantSkipped:              0,
+			wantCheckpoint:           true,
+			wantCheckpointWindowHour: 8,
+			assert: func(t *testing.T, result scheduler.PlanResult) {
+				if result.SmallTaskOnlyReason == "" {
+					t.Fatal("expected small-task-only explanation")
+				}
+				for _, window := range []string{"morning", "afternoon", "evening"} {
+					if len(result.BlockedWindows[window]) == 0 {
+						t.Fatalf("expected blocked reason for %s, got %+v", window, result.BlockedWindows)
+					}
+				}
+			},
+		},
+		{
+			name:                     "medium afternoon block zeroes afternoon budget without blocking other windows",
+			day:                      time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC),
+			seed:                     seedMediumWindowCalendarBlock,
+			wantScheduled:            1,
+			wantOverflowed:           1,
+			wantSkipped:              0,
+			wantCheckpoint:           true,
+			wantCheckpointWindowHour: 8,
+			assert: func(t *testing.T, result scheduler.PlanResult) {
+				if result.WindowBudgetsMinutes["afternoon"] != 0 {
+					t.Fatalf("afternoon budget = %d, want 0", result.WindowBudgetsMinutes["afternoon"])
+				}
+				if len(result.BlockedWindows["afternoon"]) == 0 {
+					t.Fatalf("expected afternoon blocked reason, got %+v", result.BlockedWindows)
+				}
+			},
+		},
+		{
+			name:                     "single-window large event does not trigger day-wide small-task filter",
+			day:                      time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC),
+			seed:                     seedSingleWindowLargeCalendarBlock,
+			wantScheduled:            2,
+			wantOverflowed:           1,
+			wantSkipped:              0,
+			wantCheckpoint:           true,
+			wantCheckpointWindowHour: 8,
+			assert: func(t *testing.T, result scheduler.PlanResult) {
+				if result.SmallTaskOnlyReason != "" {
+					t.Fatalf("unexpected small-task-only reason: %q", result.SmallTaskOnlyReason)
+				}
+				if result.WindowBudgetsMinutes["evening"] != 0 {
+					t.Fatalf("evening budget = %d, want 0", result.WindowBudgetsMinutes["evening"])
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -130,9 +186,10 @@ func TestPlanDayScenarios(t *testing.T) {
 			taskService := tasks.NewService(tasks.NewRepository(sqlDB))
 			occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
 			checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
-			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo)
+			blockRepo := store.NewCalendarBlockRepository(sqlDB)
+			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
 
-			userID := tt.seed(ctx, t, sqlDB, userService, taskService, occurrenceService)
+			userID := tt.seed(ctx, t, sqlDB, userService, taskService, occurrenceService, blockRepo)
 			result, err := svc.PlanDay(ctx, userID, tt.day)
 			if err != nil {
 				t.Fatalf("PlanDay() error = %v", err)
@@ -164,7 +221,7 @@ func TestPlanDayScenarios(t *testing.T) {
 	}
 }
 
-func seedNormalDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service) string {
+func seedNormalDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, _ *store.CalendarBlockRepository) string {
 	t.Helper()
 	user, err := userService.Create(ctx, users.User{DisplayName: "Normal", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
 	if err != nil {
@@ -190,7 +247,7 @@ func seedNormalDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *us
 	return user.ID
 }
 
-func seedOverloadedDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service) string {
+func seedOverloadedDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, _ *store.CalendarBlockRepository) string {
 	t.Helper()
 	user, err := userService.Create(ctx, users.User{DisplayName: "Overloaded", Timezone: "UTC", DailyTimeBudgetMinutes: 10})
 	if err != nil {
@@ -210,7 +267,7 @@ func seedOverloadedDay(ctx context.Context, t *testing.T, _ *sql.DB, userService
 	return user.ID
 }
 
-func seedLaundryDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service) string {
+func seedLaundryDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service, _ *store.CalendarBlockRepository) string {
 	t.Helper()
 	user, err := userService.Create(ctx, users.User{DisplayName: "Laundry", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
 	if err != nil {
@@ -230,7 +287,7 @@ func seedLaundryDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *u
 	return user.ID
 }
 
-func seedWeeklyCountMultistep(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service) string {
+func seedWeeklyCountMultistep(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, _ *store.CalendarBlockRepository) string {
 	t.Helper()
 	user, err := userService.Create(ctx, users.User{DisplayName: "Weekly Count", Timezone: "UTC", DailyTimeBudgetMinutes: 45})
 	if err != nil {
@@ -256,7 +313,7 @@ func seedWeeklyCountMultistep(ctx context.Context, t *testing.T, _ *sql.DB, user
 	return user.ID
 }
 
-func seedSameWindowGap(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service) string {
+func seedSameWindowGap(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service, _ *store.CalendarBlockRepository) string {
 	t.Helper()
 	user, err := userService.Create(ctx, users.User{DisplayName: "Gap", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
 	if err != nil {
@@ -268,6 +325,70 @@ func seedSameWindowGap(ctx context.Context, t *testing.T, _ *sql.DB, userService
 		{Name: "Sterilize parts", StepOrder: 2, DurationMinutes: 10, TimeOfDayPreference: tasks.TimeOfDayMorning, GapRule: tasks.SubtaskGapRule{MinGapAfterPreviousMinutes: 90}},
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	return user.ID
+}
+
+func seedAllDayCalendarBlock(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service, blockRepo *store.CalendarBlockRepository) string {
+	t.Helper()
+	user, err := userService.Create(ctx, users.User{DisplayName: "Calendar Large", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Quick reset", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Deep clean", DurationMinutes: 30, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-07-17", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-1", LocalDate: "2026-07-17", Timezone: "UTC", Title: "Family travel", Detail: "large calendar event", IsAllDay: true, Classification: "large", Window: "all-day"}}); err != nil {
+		t.Fatal(err)
+	}
+	return user.ID
+}
+
+func seedMediumWindowCalendarBlock(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service, blockRepo *store.CalendarBlockRepository) string {
+	t.Helper()
+	user, err := userService.Create(ctx, users.User{DisplayName: "Calendar Medium", Timezone: "UTC", DailyTimeBudgetMinutes: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Morning admin", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Afternoon outing", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-07-18", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-2", LocalDate: "2026-07-18", Timezone: "UTC", Title: "Pediatrician", Detail: "medium calendar event", Classification: "medium", Window: "afternoon"}}); err != nil {
+		t.Fatal(err)
+	}
+	return user.ID
+}
+
+func seedSingleWindowLargeCalendarBlock(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service, blockRepo *store.CalendarBlockRepository) string {
+	t.Helper()
+	user, err := userService.Create(ctx, users.User{DisplayName: "Calendar Evening Large", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Morning admin", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Afternoon errands", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Evening project", DurationMinutes: 30, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayEvening}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-07-19", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-3", LocalDate: "2026-07-19", Timezone: "UTC", Title: "Wedding reception", Detail: "large calendar event", Classification: "large", Window: "evening"}}); err != nil {
 		t.Fatal(err)
 	}
 	return user.ID

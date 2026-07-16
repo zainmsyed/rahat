@@ -1,0 +1,17 @@
+{
+  "note": "Captured two reusable candidates from the story-005 review findings.",
+  "candidates": [
+    {
+      "text": "OAuth account-link flows must verify the returned state against stored initiation context before exchanging the code or binding tokens to a local user.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "The story-005 review found that using an auth code without verified state allowed calendar tokens to be attached to the wrong user, which is a reusable security rule for any OAuth linking flow."
+    },
+    {
+      "text": "When a scheduling rule is intended for whole-day constraints, do not trigger it from a single-window event unless the implementation explicitly proves full-day coverage.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "The review found that day-wide small-task filtering was incorrectly activated by any large event, showing the need to keep full-day scheduling constraints separate from single-window blockers."
+    }
+  ]
+}

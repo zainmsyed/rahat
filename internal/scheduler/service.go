@@ -20,15 +20,17 @@ type Service struct {
 	tasks       *tasks.Service
 	occurrences *occurrences.Service
 	checkpoints *store.ScheduleCheckpointRepository
+	blocks      *store.CalendarBlockRepository
 	clock       Clock
 }
 
-func NewService(usersService *users.Service, tasksService *tasks.Service, occurrenceService *occurrences.Service, checkpointRepo *store.ScheduleCheckpointRepository) *Service {
+func NewService(usersService *users.Service, tasksService *tasks.Service, occurrenceService *occurrences.Service, checkpointRepo *store.ScheduleCheckpointRepository, blockRepo *store.CalendarBlockRepository) *Service {
 	return &Service{
 		users:       usersService,
 		tasks:       tasksService,
 		occurrences: occurrenceService,
 		checkpoints: checkpointRepo,
+		blocks:      blockRepo,
 		clock:       realClock{},
 	}
 }
@@ -50,6 +52,11 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 	planDate := day.UTC()
 	planDateStr := store.FormatDate(planDate)
 	backlog, current, history := splitOccurrences(allOccurrences, planDateStr)
+	calendarBlocks, err := s.blocks.ListByUserAndDate(ctx, userID, planDateStr)
+	if err != nil {
+		return PlanResult{}, fmt.Errorf("load calendar blocks: %w", err)
+	}
+	constraints := buildCalendarConstraints(calendarBlocks)
 
 	candidates, err := s.buildCandidates(ctx, tasksWithSubtasks, history, backlog, current, planDate)
 	if err != nil {
@@ -57,7 +64,8 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 	}
 
 	windowBudgets := splitWindowBudgets(user.DailyTimeBudgetMinutes, candidates)
-	scheduled, overflowed, skipped := fitCandidates(candidates, windowBudgets, planDate)
+	applyCalendarBudgets(windowBudgets, constraints)
+	scheduled, overflowed, skipped := fitCandidates(candidates, windowBudgets, planDate, constraints)
 
 	persistedScheduled := make([]occurrences.Occurrence, 0, len(scheduled))
 	for _, candidate := range scheduled {
@@ -122,6 +130,8 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 		Skipped:              persistedSkipped,
 		Checkpoint:           checkpoint,
 		WindowBudgetsMinutes: windowBudgets,
+		BlockedWindows:       constraints.BlockedWindows,
+		SmallTaskOnlyReason:  constraints.SmallTaskOnlyReason,
 	}, nil
 }
 
@@ -414,7 +424,52 @@ func splitWindowBudgets(total int, candidates []scheduledCandidate) map[string]i
 	return budgets
 }
 
-func fitCandidates(candidates []scheduledCandidate, budgets map[string]int, planDate time.Time) (scheduled, overflowed, skipped []scheduledCandidate) {
+type calendarConstraints struct {
+	BlockedWindows      map[string][]string
+	ZeroBudgetWindows   map[string]bool
+	SmallTaskOnlyReason string
+}
+
+func buildCalendarConstraints(blocks []store.CalendarBlock) calendarConstraints {
+	constraints := calendarConstraints{BlockedWindows: map[string][]string{"morning": {}, "afternoon": {}, "evening": {}}, ZeroBudgetWindows: map[string]bool{}}
+	hasLargeDayConstraint := false
+	for _, block := range blocks {
+		reason := block.Title
+		if reason == "" {
+			reason = "calendar event"
+		}
+		reason = fmt.Sprintf("%s (%s)", reason, block.Classification)
+		switch block.Classification {
+		case "medium":
+			if block.Window == "morning" || block.Window == "afternoon" || block.Window == "evening" {
+				constraints.BlockedWindows[block.Window] = append(constraints.BlockedWindows[block.Window], reason)
+				constraints.ZeroBudgetWindows[block.Window] = true
+			}
+		case "large":
+			if block.Window == "all-day" || block.IsAllDay {
+				hasLargeDayConstraint = true
+				for _, window := range []string{"morning", "afternoon", "evening"} {
+					constraints.BlockedWindows[window] = append(constraints.BlockedWindows[window], reason)
+				}
+			} else if block.Window == "morning" || block.Window == "afternoon" || block.Window == "evening" {
+				constraints.BlockedWindows[block.Window] = append(constraints.BlockedWindows[block.Window], reason)
+				constraints.ZeroBudgetWindows[block.Window] = true
+			}
+		}
+	}
+	if hasLargeDayConstraint {
+		constraints.SmallTaskOnlyReason = "Large calendar commitment today; only shorter tasks should be scheduled."
+	}
+	return constraints
+}
+
+func applyCalendarBudgets(budgets map[string]int, constraints calendarConstraints) {
+	for window := range constraints.ZeroBudgetWindows {
+		budgets[window] = 0
+	}
+}
+
+func fitCandidates(candidates []scheduledCandidate, budgets map[string]int, planDate time.Time, constraints calendarConstraints) (scheduled, overflowed, skipped []scheduledCandidate) {
 	used := map[string]int{"morning": 0, "afternoon": 0, "evening": 0}
 	stepWindows := map[string]int{}
 	stepReadyAt := map[string]time.Time{}
@@ -459,6 +514,16 @@ func fitCandidates(candidates []scheduledCandidate, budgets map[string]int, plan
 			}
 		}
 		candidate.Occurrence.ReadyAt = &readyAt
+
+		if constraints.SmallTaskOnlyReason != "" && candidate.Duration > 15 {
+			nextRollover := candidate.Occurrence.RolloverCount + 1
+			if candidate.Task.Priority != tasks.PriorityHigh && nextRollover >= rolloverCap {
+				skipped = append(skipped, candidate)
+				continue
+			}
+			overflowed = append(overflowed, candidate)
+			continue
+		}
 
 		if used[window]+candidate.Duration <= budgets[window] {
 			used[window] += candidate.Duration
