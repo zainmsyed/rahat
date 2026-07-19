@@ -9,10 +9,10 @@
 ---
 
 ## Goal
-Provide a lightweight SvelteKit onboarding flow so a tester can create a Rahat profile, set timezone and daily budget, add Telegram and email contact details, connect Google Calendar, and load starter or custom tasks without needing a full account system or persistent dashboard. This story should make first-use setup realistic for the initial testing group.
+Provide a lightweight SvelteKit onboarding flow so a tester can create a Rahat profile, set timezone and daily budget, add Telegram and email contact details, connect Google Calendar, and load starter or custom tasks without needing a full account system or persistent dashboard. This story should make first-use setup realistic for the initial testing group, especially time-constrained parents who cannot be expected to understand internal IDs, infra state, or setup debugging.
 
 ## Verification
-A brand-new tester can finish the onboarding flow and end with a saved profile, at least one task, optional calendar connection, and enough data for the next daily schedule run without manual database edits.
+A brand-new tester can finish the onboarding flow and end with a saved profile, at least one task, optional calendar connection, and enough data for the next daily schedule run without manual database edits or off-product detective work such as finding a Telegram chat ID by hand.
 
 ## Scope — files this story may touch
 - web/src/routes/onboarding/
@@ -43,16 +43,25 @@ A brand-new tester can finish the onboarding flow and end with a saved profile, 
 - [x] Expose Google Calendar connect and disconnect steps using the read-only integration
 - [x] Finish onboarding by validating required data and triggering the first schedule seed or run
 - [x] Delete the Google calendar connection row on disconnect via `internal/store` `CalendarConnectionRepository.Delete` (scope exception for `internal/store/` explicitly approved by the user; originally implemented as token-clearing to stay in scope)
+- [ ] Add a step-by-step, plain-language walkthrough in the onboarding UI that tells the tester exactly what to do next and what is optional vs required
+- [ ] Replace manual Telegram chat ID entry with a guided verification flow that lets the user connect Telegram by sending a short alphanumeric code to the bot and seeing on-screen confirmation
+- [ ] If feasible, provide a one-tap Telegram deep link and/or QR code so mobile testers can open the bot directly instead of searching manually
+- [ ] Show optional integrations such as Google Calendar as clearly unavailable when server config is missing, instead of presenting a dead-end or confusing connect affordance
 
 ---
 
 ## Issues
 
+- The current onboarding implementation is technically functional but UX-poor for the actual tester profile. Asking a parent beta tester to discover and paste a raw Telegram chat ID is not acceptable onboarding.
+- The current flow exposes implementation details (invite token semantics, bot setup assumptions, missing integration config) instead of guiding the user through one obvious next action at a time.
+- Telegram connection needs to move from "enter chat ID" to "send this code to the bot and wait for confirmation" so the product does the linking work.
+- Optional integrations must fail gracefully in-product. If Google Calendar is not configured, the screen should clearly say so and let the user continue without ambiguity.
+
 ---
 
 ## Completion Summary
 
-Implemented the full onboarding flow across the Go API and the SvelteKit frontend.
+Implemented the baseline onboarding flow across the Go API and the SvelteKit frontend. This is a technically complete first pass, but additional UX work remains in this story because the current Telegram/contact experience is not acceptable for low-time beta testers.
 
 **Backend** (`cmd/server/onboarding.go`, wiring in `cmd/server/main.go`):
 - Invite-gated session flow with no auth system: `POST /onboarding/start` validates an invite token from `ONBOARDING_INVITE_TOKENS` (comma-separated; defaults to `rahat-tester` in development), creates the user, and returns a stateless HMAC-SHA256-signed session token (7-day TTL, secret from `ONBOARDING_SESSION_SECRET`, dev default in development). All other `/onboarding/*` endpoints require `Authorization: Bearer <token>`; no session table or migration was needed.
@@ -65,6 +74,7 @@ Implemented the full onboarding flow across the Go API and the SvelteKit fronten
 
 **Frontend** (`web/src/routes/onboarding/`, `web/src/lib/api/`, `web/src/lib/components/`):
 - Six-step wizard (Invite → Profile → Contacts → Tasks → Calendar → Finish) with a progress indicator; the session token is kept in `localStorage` so testers can resume, and `?step=` deep-links support returning from the OAuth redirect.
+- Follow-up UX review with the user identified a critical gap: the current manual Telegram chat-ID entry is too operator-centric for the target audience and must be replaced by a guided connection-and-confirmation experience before this story should be considered truly ready.
 - Typed API client (`$lib/api/client.ts`, `$lib/api/types.ts`) with shared cadence/priority/time-of-day options.
 - Profile step offers all IANA timezones via `Intl.supportedValuesOf`, defaulting to the browser timezone; contacts step explains channel roles; tasks step lists existing tasks with edit/delete, a starter library with one-click add, and a custom task form with dynamic subtask rows; calendar step handles connect (redirect) and disconnect; finish step shows a readiness summary and calls `/onboarding/complete`, reporting scheduled/overflowed/skipped counts.
 - OAuth callback route `/onboarding/calendar/callback` exchanges `state`/`code` through the authenticated API and links back to the calendar step.
