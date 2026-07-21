@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -47,6 +48,50 @@ func (s *Service) UpdateTask(ctx context.Context, task Task) (Task, error) {
 	return s.repo.UpdateTask(ctx, task)
 }
 
+func (s *Service) ReplaceTaskWithSubtasks(ctx context.Context, task Task, subtasks []Subtask) (TaskWithSubtasks, error) {
+	tx, err := s.repo.db.BeginTx(ctx, nil)
+	if err != nil {
+		return TaskWithSubtasks{}, fmt.Errorf("begin task replace transaction: %w", err)
+	}
+
+	if task.ID == "" {
+		createdTask, err := createTask(ctx, tx, task)
+		if err != nil {
+			_ = tx.Rollback()
+			return TaskWithSubtasks{}, err
+		}
+		task = createdTask
+	} else {
+		updatedTask, err := updateTask(ctx, tx, task)
+		if err != nil {
+			_ = tx.Rollback()
+			return TaskWithSubtasks{}, err
+		}
+		task = updatedTask
+		if err := deleteSubtasksByTask(ctx, tx, task.ID); err != nil {
+			_ = tx.Rollback()
+			return TaskWithSubtasks{}, err
+		}
+	}
+
+	createdSubtasks := make([]Subtask, 0, len(subtasks))
+	for _, subtask := range subtasks {
+		subtask.ID = ""
+		subtask.TaskID = task.ID
+		createdSubtask, err := createSubtask(ctx, tx, subtask)
+		if err != nil {
+			_ = tx.Rollback()
+			return TaskWithSubtasks{}, err
+		}
+		createdSubtasks = append(createdSubtasks, createdSubtask)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return TaskWithSubtasks{}, fmt.Errorf("commit task replace transaction: %w", err)
+	}
+	return s.GetTaskWithSubtasks(ctx, task.ID)
+}
+
 func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 	return s.repo.DeleteTask(ctx, taskID)
 }
@@ -90,4 +135,33 @@ func (s *Service) PauseTask(ctx context.Context, taskID string, paused bool) (Ta
 
 func (s *Service) ListStarterTaskTemplates(ctx context.Context) ([]StarterTaskTemplate, error) {
 	return s.repo.ListStarterTaskTemplates(ctx)
+}
+
+func (s *Service) CreateTaskFromStarterTemplate(ctx context.Context, userID, templateID string) (TaskWithSubtasks, error) {
+	templates, err := s.repo.ListStarterTaskTemplates(ctx)
+	if err != nil {
+		return TaskWithSubtasks{}, err
+	}
+	for _, tmpl := range templates {
+		if tmpl.ID != templateID {
+			continue
+		}
+		task := Task{
+			UserID:              userID,
+			Name:                tmpl.Name,
+			Description:         tmpl.Description,
+			DurationMinutes:     tmpl.DurationMinutes,
+			CadenceType:         tmpl.CadenceType,
+			CadenceValue:        tmpl.CadenceValue,
+			Priority:            tmpl.Priority,
+			TimeOfDayPreference: tmpl.TimeOfDayPreference,
+			IsMultistep:         tmpl.IsMultistep,
+		}
+		subtasks := make([]Subtask, 0, len(tmpl.Subtasks))
+		for _, starter := range tmpl.Subtasks {
+			subtasks = append(subtasks, Subtask{StepOrder: starter.StepOrder, Name: starter.Name, DurationMinutes: starter.DurationMinutes, TimeOfDayPreference: starter.TimeOfDayPreference, GapRule: SubtaskGapRule{MinGapAfterPreviousMinutes: starter.MinGapAfterPreviousMinutes}})
+		}
+		return s.CreateTaskWithSubtasks(ctx, task, subtasks)
+	}
+	return TaskWithSubtasks{}, errors.New("starter task template not found")
 }

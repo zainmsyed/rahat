@@ -51,16 +51,23 @@ func createTask(ctx context.Context, exec dbExecutor, task Task) (Task, error) {
 }
 
 func (r *Repository) UpdateTask(ctx context.Context, task Task) (Task, error) {
+	updated, err := updateTask(ctx, r.db, task)
+	if err != nil {
+		return Task{}, err
+	}
+	return r.GetTaskByID(ctx, updated.ID)
+}
+
+func updateTask(ctx context.Context, exec dbExecutor, task Task) (Task, error) {
 	task.UpdatedAt = time.Now().UTC()
-	if _, err := r.db.ExecContext(ctx, `
+	if _, err := exec.ExecContext(ctx, `
 		UPDATE tasks
 		SET name = ?, description = ?, duration_minutes = ?, cadence_type = ?, cadence_value = ?, priority = ?, time_of_day_preference = ?, is_multistep = ?, is_paused = ?, updated_at = ?
 		WHERE id = ?
 	`, task.Name, task.Description, task.DurationMinutes, task.CadenceType, task.CadenceValue, task.Priority, task.TimeOfDayPreference, task.IsMultistep, task.IsPaused, store.FormatTime(task.UpdatedAt), task.ID); err != nil {
 		return Task{}, fmt.Errorf("update task %s: %w", task.ID, err)
 	}
-
-	return r.GetTaskByID(ctx, task.ID)
+	return task, nil
 }
 
 func (r *Repository) GetTaskByID(ctx context.Context, id string) (Task, error) {
@@ -198,6 +205,13 @@ func (r *Repository) UpdateSubtask(ctx context.Context, subtask Subtask) (Subtas
 func (r *Repository) DeleteSubtask(ctx context.Context, id string) error {
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM subtasks WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("delete subtask %s: %w", id, err)
+	}
+	return nil
+}
+
+func deleteSubtasksByTask(ctx context.Context, exec dbExecutor, taskID string) error {
+	if _, err := exec.ExecContext(ctx, `DELETE FROM subtasks WHERE task_id = ?`, taskID); err != nil {
+		return fmt.Errorf("delete subtasks for task %s: %w", taskID, err)
 	}
 	return nil
 }

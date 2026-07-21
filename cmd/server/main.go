@@ -67,6 +67,8 @@ func main() {
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
 	googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
+	onboardingService := &onboardingHandler{sessions: newOnboardingSessionStore(os.Getenv("ONBOARDING_INVITE_CODE")), users: userService, tasks: taskService, scheduler: schedulerService}
+	onboardingService.register(mux)
 
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	webhookSecret := os.Getenv("TELEGRAM_WEBHOOK_SECRET")
@@ -172,7 +174,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           mux,
+		Handler:           withCORS(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -239,6 +241,19 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func parseDay(value string) time.Time {

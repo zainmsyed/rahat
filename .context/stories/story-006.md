@@ -1,6 +1,6 @@
 # Story 006: Build the guided core onboarding flow
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** full-stack  
 **Created:** 2026-07-21  
 **Last accessed:** 2026-07-21  
@@ -36,12 +36,12 @@ A brand-new non-technical tester can complete the core flow unaided: profile sav
 ---
 
 ## Checklist
-- [ ] Add a minimal invite or token-based onboarding session flow without a full auth system
-- [ ] Present a persistent step-by-step plain-language walkthrough that states what is required versus optional at every step
-- [ ] Capture profile basics, local timezone, and daily task-time budget with friendly defaults and inline validation
-- [ ] Let the tester optionally add an email address for daily recaps, clearly framed as optional
-- [ ] Offer starter-library tasks plus manual task and subtask creation or editing with plain-language guidance
-- [ ] Finish onboarding by validating required data, seeding the first schedule, and showing a clear on-screen summary of what happens next
+- [x] Add a minimal invite or token-based onboarding session flow without a full auth system
+- [x] Present a persistent step-by-step plain-language walkthrough that states what is required versus optional at every step
+- [x] Capture profile basics, local timezone, and daily task-time budget with friendly defaults and inline validation
+- [x] Let the tester optionally add an email address for daily recaps, clearly framed as optional
+- [x] Offer starter-library tasks plus manual task and subtask creation or editing with plain-language guidance
+- [x] Finish onboarding by validating required data, seeding the first schedule, and showing a clear on-screen summary of what happens next
 
 ---
 
@@ -50,3 +50,7 @@ A brand-new non-technical tester can complete the core flow unaided: profile sav
 ---
 
 ## Completion Summary
+- Added a minimal invite-code onboarding session flow in `cmd/server/` with in-memory session tokens, profile/task/finish endpoints, and permissive CORS so the SvelteKit onboarding UI can call the Go API during local development.
+- Added onboarding-specific task helpers in `internal/tasks/` so the flow can clone starter-library templates and fully replace a task plus its subtasks during edits.
+- Built a guided `/onboarding` SvelteKit experience with a persistent step list, required/optional labels, inline profile validation, optional email capture, starter-task shortcuts, and a custom task/subtask editor.
+- Finished the flow with backend validation plus first-schedule seeding, then surfaced a plain-language completion summary that explains what Rahat saved and what happens next.
