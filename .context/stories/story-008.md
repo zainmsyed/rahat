@@ -1,45 +1,44 @@
-# Story 008: Send email overview and recap digests
+# Story 008: Build the guided Google Calendar connection onboarding
 
 **Status:** not-started  
-**Type:** integration  
-**Created:** 2026-07-07  
-**Last accessed:** 2026-07-07  
+**Type:** full-stack  
+**Created:** 2026-07-21  
+**Last accessed:** 2026-07-21  
 **Completed:** —
 
 ---
 
 ## Goal
-Keep email in v1 as a non-interactive overview and recap channel that complements Telegram by summarizing the current schedule and linking to the passive lookahead page. This story should not attempt email reply parsing or replace Telegram as the real-time check-in surface.
+Let a beta tester connect Google Calendar during onboarding as an optional, clearly-explained step: one obvious connect action, a safe return into onboarding after the Google redirect, honest status when the server is not configured for Google OAuth, and clean disconnect/reconnect. The tester should always understand that calendar access is read-only, why it helps, and that skipping it is fine.
 
 ## Verification
-A tester with email enabled receives a readable overview or recap that matches the current schedule, includes a safe link to the read-only page, and can disable email without affecting Telegram reminders.
+On a server with Google OAuth configured, a tester can connect calendar in one action and land back in onboarding with a visible connected state. On a server without OAuth config, the screen states plainly that calendar is unavailable and optional, and the tester continues without confusion or dead ends.
 
 ## Scope — files this story may touch
-- internal/notifications/email/
-- internal/notifications/preferences/
-- internal/events/
 - web/src/routes/onboarding/
+- web/src/lib/components/
 - web/src/lib/api/
-- internal/tokens/
+- internal/calendar/
+- cmd/server/
 
 ## Out of scope — do not touch
-- Email reply parsing or inline task actions
-- SMS delivery
-- Replacing Telegram as the interactive loop
+- Telegram connection flow (Story 007)
+- Calendar sync and block classification logic (Story 005)
+- Calendar write access of any kind
+- Non-Google calendar providers
 
 ## Dependencies
-- Story 003
+- Story 005
 - Story 006
-- Story 007
 
 ---
 
 ## Checklist
-- [ ] Add SMTP-backed email sending with template support and delivery logging
-- [ ] Compose overview or recap emails that summarize today’s schedule and pending check-in context
-- [ ] Include a safe link to the read-only today and tomorrow page instead of interactive task controls
-- [ ] Let users opt in or out of email recaps without changing Telegram reminder behavior
-- [ ] Add tests or preview fixtures for empty days, blocked-window days, and mixed-task days
+- [ ] Present calendar connect as clearly optional and recommended, with a plain-language explanation of read-only access and why it helps
+- [ ] Show calendar as clearly unavailable when server OAuth config is missing and let the tester continue without a dead end
+- [ ] Provide one obvious connect action with a clear return path into onboarding after the Google redirect
+- [ ] Support disconnecting and reconnecting cleanly, with state reflected accurately on-screen
+- [ ] Reflect the final calendar connection state in the onboarding review step
 
 ---
 

@@ -1,18 +1,18 @@
-# Story 006: Build the onboarding web flow
+# Story 006: Build the guided core onboarding flow
 
 **Status:** not-started  
 **Type:** full-stack  
-**Created:** 2026-07-07  
-**Last accessed:** 2026-07-07  
+**Created:** 2026-07-21  
+**Last accessed:** 2026-07-21  
 **Completed:** —
 
 ---
 
 ## Goal
-Provide a lightweight SvelteKit onboarding flow so a tester can create a Rahat profile, set timezone and daily budget, add Telegram and email contact details, connect Google Calendar, and load starter or custom tasks without needing a full account system or persistent dashboard. This story should make first-use setup realistic for the initial testing group.
+Provide a step-by-step SvelteKit onboarding flow that hand-holds a non-technical new-mom beta tester through creating her Rahat profile: name, timezone, daily time budget, an optional email address for recaps, and at least one starter or custom task. Every screen must state plainly what to do next and what is required versus optional, so a tester can finish without any technical knowledge or off-product detective work. Telegram and Google Calendar connections are handled separately in Stories 007 and 008.
 
 ## Verification
-A brand-new tester can finish the onboarding flow and end with a saved profile, at least one task, optional calendar connection, and enough data for the next daily schedule run without manual database edits.
+A brand-new non-technical tester can complete the core flow unaided: profile saved, optional email captured, at least one task added, and a first schedule seeded with a clear on-screen summary of what happens next — no raw IDs, no config knowledge, no manual database edits.
 
 ## Scope — files this story may touch
 - web/src/routes/onboarding/
@@ -20,28 +20,28 @@ A brand-new tester can finish the onboarding flow and end with a saved profile, 
 - web/src/lib/api/
 - internal/users/
 - internal/tasks/
-- internal/calendar/
 - cmd/server/
 
 ## Out of scope — do not touch
+- Telegram connection flow (Story 007)
+- Google Calendar connection flow (Story 008)
 - A day-to-day task management dashboard
 - Multi-user accounts or household assignment
-- SMS setup
 
 ## Dependencies
 - Story 001
 - Story 002
-- Story 005
+- Story 003
 
 ---
 
 ## Checklist
 - [ ] Add a minimal invite or token-based onboarding session flow without a full auth system
-- [ ] Capture profile basics, local timezone, and daily task-time budget
-- [ ] Let the user supply Telegram and email contact details with clear channel roles
-- [ ] Offer starter-library tasks plus manual task and subtask creation or editing
-- [ ] Expose Google Calendar connect and disconnect steps using the read-only integration
-- [ ] Finish onboarding by validating required data and triggering the first schedule seed or run
+- [ ] Present a persistent step-by-step plain-language walkthrough that states what is required versus optional at every step
+- [ ] Capture profile basics, local timezone, and daily task-time budget with friendly defaults and inline validation
+- [ ] Let the tester optionally add an email address for daily recaps, clearly framed as optional
+- [ ] Offer starter-library tasks plus manual task and subtask creation or editing with plain-language guidance
+- [ ] Finish onboarding by validating required data, seeding the first schedule, and showing a clear on-screen summary of what happens next
 
 ---
 
