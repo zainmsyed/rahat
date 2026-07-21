@@ -10,6 +10,7 @@
 		createTask,
 		deleteTask,
 		emptyTaskDraft,
+		formatTaskFrequency,
 		getState,
 		getStoredOnboardingToken,
 		readTokenFromUrl,
@@ -150,7 +151,7 @@
 					<article>
 						<h3>{template.name}</h3>
 						<p>{template.description}</p>
-						<p class="meta">{template.duration_minutes} min · {template.cadence_type === 'interval' ? `Every ${template.cadence_value} day(s)` : `${template.cadence_value} time(s) each week`}</p>
+						<p class="meta">{template.duration_minutes} min · {formatTaskFrequency(template)}</p>
 						{#if template.subtasks.length > 0}
 							<ul>
 								{#each template.subtasks as subtask}

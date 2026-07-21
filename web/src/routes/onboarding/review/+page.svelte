@@ -6,6 +6,7 @@
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
 		finishOnboarding,
+		formatTaskSummary,
 		getState,
 		getStoredOnboardingToken,
 		readTokenFromUrl,
@@ -94,6 +95,18 @@
 					<h3>Your tasks</h3>
 					<p>{state.tasks.length} task(s) ready for Rahat to schedule.</p>
 					<p>No raw IDs or technical setup is needed from you here.</p>
+					{#if state.tasks.length > 0}
+						<ul class="task-list">
+							{#each state.tasks as task}
+								<li>
+									<strong>{task.name}</strong>
+									<span>
+										{formatTaskSummary(task)}
+									</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				</article>
 			</div>
 
@@ -210,10 +223,17 @@
 		background: #fff1f0;
 	}
 
+	.task-list,
 	.schedule-list {
 		padding-left: 1.1rem;
 	}
 
+	.task-list li,
+	.schedule-list li {
+		margin-bottom: 0.55rem;
+	}
+
+	.task-list span,
 	.schedule-list span {
 		display: block;
 		color: #5d6b82;

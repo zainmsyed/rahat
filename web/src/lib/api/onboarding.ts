@@ -218,6 +218,26 @@ export function readTokenFromUrl() {
 	return new URL(window.location.href).searchParams.get('token') ?? '';
 }
 
+export function formatTaskFrequency(task: Pick<OnboardingTask, 'cadence_type' | 'cadence_value'>) {
+	return task.cadence_type === 'interval'
+		? `Every ${task.cadence_value} day(s)`
+		: `${task.cadence_value} time(s) each week`;
+}
+
+export function formatTaskSummary(task: OnboardingTask) {
+	const parts: string[] = [`${task.duration_minutes} min`];
+	if (task.cadence_type && task.cadence_value) {
+		parts.push(formatTaskFrequency(task));
+	}
+	if (task.time_of_day_preference && task.time_of_day_preference !== 'any') {
+		parts.push(`best in the ${task.time_of_day_preference}`);
+	}
+	if (task.subtasks.length > 0) {
+		parts.push(`${task.subtasks.length} step(s)`);
+	}
+	return parts.join(' · ');
+}
+
 export function buildOnboardingSteps(state: OnboardingState, hasSession: boolean, finished = false): OnboardingStep[] {
 	return [
 		{
