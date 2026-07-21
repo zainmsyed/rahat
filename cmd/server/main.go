@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rahat/rahat/internal/app"
 	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	googcalendar "github.com/rahat/rahat/internal/calendar/google"
 	"github.com/rahat/rahat/internal/checkins"
@@ -51,9 +50,29 @@ func main() {
 		return
 	}
 
-	baseHandler := app.NewServer(logger, cfg, sqlDB)
 	mux := http.NewServeMux()
-	mux.Handle("/", baseHandler)
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":    "ok",
+			"service":   "rahat-api",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if err := sqlDB.PingContext(r.Context()); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"status": "not-ready",
+				"error":  err.Error(),
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":        "ready",
+			"database":      "ok",
+			"environment":   cfg.AppEnv,
+			"database_path": cfg.DatabasePath,
+		})
+	})
 
 	userService := usr.NewService(usr.NewRepository(sqlDB))
 	taskService := taskpkg.NewService(taskpkg.NewRepository(sqlDB))

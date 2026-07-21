@@ -74,7 +74,16 @@ export type TaskDraft = {
 	subtasks: OnboardingSubtask[];
 };
 
+export type OnboardingStep = {
+	id: number;
+	title: string;
+	required: boolean;
+	description: string;
+	complete: boolean;
+};
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+const storageKey = 'rahat-onboarding-token';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -162,4 +171,92 @@ export function emptyTaskDraft(): TaskDraft {
 		time_of_day_preference: 'morning',
 		subtasks: []
 	};
+}
+
+export function getStoredOnboardingToken() {
+	if (typeof localStorage === 'undefined') {
+		return '';
+	}
+	return localStorage.getItem(storageKey) ?? '';
+}
+
+export function setStoredOnboardingToken(token: string) {
+	if (typeof localStorage === 'undefined') {
+		return;
+	}
+	localStorage.setItem(storageKey, token);
+}
+
+export function clearStoredOnboardingToken() {
+	if (typeof localStorage === 'undefined') {
+		return;
+	}
+	localStorage.removeItem(storageKey);
+}
+
+export function syncTokenInUrl(token: string) {
+	if (typeof window === 'undefined') {
+		return;
+	}
+	const url = new URL(window.location.href);
+	url.searchParams.set('token', token);
+	url.searchParams.delete('invite');
+	window.history.replaceState({}, '', url);
+}
+
+export function readInviteCodeFromUrl() {
+	if (typeof window === 'undefined') {
+		return '';
+	}
+	return new URL(window.location.href).searchParams.get('invite') ?? '';
+}
+
+export function readTokenFromUrl() {
+	if (typeof window === 'undefined') {
+		return '';
+	}
+	return new URL(window.location.href).searchParams.get('token') ?? '';
+}
+
+export function buildOnboardingSteps(state: OnboardingState, hasSession: boolean, finished = false): OnboardingStep[] {
+	return [
+		{
+			id: 0,
+			title: 'Start with your invite code',
+			required: true,
+			description: 'Enter the invite code you were given so Rahat can open your guided setup.',
+			complete: hasSession
+		},
+		{
+			id: 1,
+			title: 'Tell Rahat about you',
+			required: true,
+			description: 'Add your name, timezone, daily task-time budget, and an optional email for recaps.',
+			complete: state.has_profile
+		},
+		{
+			id: 2,
+			title: 'Pick at least one task',
+			required: true,
+			description: 'Choose from the starter ideas or add your own task and steps in plain language.',
+			complete: state.tasks.length > 0
+		},
+		{
+			id: 3,
+			title: 'Review and finish',
+			required: true,
+			description: 'Confirm everything looks right, let Rahat seed your first schedule, and read what happens next.',
+			complete: finished
+		}
+	];
+}
+
+export function nextOnboardingPath(state: OnboardingState) {
+	if (!state.has_profile) {
+		return '/onboarding/profile';
+	}
+	if (state.tasks.length === 0) {
+		return '/onboarding/tasks';
+	}
+	return '/onboarding/review';
 }

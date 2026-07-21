@@ -229,15 +229,43 @@ func randomToken() (string, error) {
 }
 
 func (h *onboardingHandler) register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /onboarding/session", h.handleCreateSession)
-	mux.HandleFunc("GET /onboarding/state", h.handleState)
-	mux.HandleFunc("GET /onboarding/starter-tasks", h.handleStarterTasks)
-	mux.HandleFunc("POST /onboarding/profile", h.handleSaveProfile)
-	mux.HandleFunc("POST /onboarding/tasks/from-template", h.handleCreateTaskFromTemplate)
-	mux.HandleFunc("POST /onboarding/tasks", h.handleCreateTask)
-	mux.HandleFunc("PUT /onboarding/tasks/{taskID}", h.handleUpdateTask)
-	mux.HandleFunc("DELETE /onboarding/tasks/{taskID}", h.handleDeleteTask)
-	mux.HandleFunc("POST /onboarding/finish", h.handleFinish)
+	mux.HandleFunc("/onboarding/session", methodHandler(http.MethodPost, h.handleCreateSession))
+	mux.HandleFunc("/onboarding/state", methodHandler(http.MethodGet, h.handleState))
+	mux.HandleFunc("/onboarding/starter-tasks", methodHandler(http.MethodGet, h.handleStarterTasks))
+	mux.HandleFunc("/onboarding/profile", methodHandler(http.MethodPost, h.handleSaveProfile))
+	mux.HandleFunc("/onboarding/tasks/from-template", methodHandler(http.MethodPost, h.handleCreateTaskFromTemplate))
+	mux.HandleFunc("/onboarding/tasks", methodHandler(http.MethodPost, h.handleCreateTask))
+	mux.HandleFunc("/onboarding/tasks/", h.handleTaskByID)
+	mux.HandleFunc("/onboarding/finish", methodHandler(http.MethodPost, h.handleFinish))
+}
+
+func methodHandler(method string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method {
+			w.Header().Set("Allow", method)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (h *onboardingHandler) handleTaskByID(w http.ResponseWriter, r *http.Request) {
+	taskID := strings.TrimPrefix(r.URL.Path, "/onboarding/tasks/")
+	if taskID == "" || strings.Contains(taskID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	r.SetPathValue("taskID", taskID)
+	switch r.Method {
+	case http.MethodPut:
+		h.handleUpdateTask(w, r)
+	case http.MethodDelete:
+		h.handleDeleteTask(w, r)
+	default:
+		w.Header().Set("Allow", "PUT, DELETE")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (h *onboardingHandler) handleCreateSession(w http.ResponseWriter, r *http.Request) {
