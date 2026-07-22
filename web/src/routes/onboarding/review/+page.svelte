@@ -20,7 +20,7 @@
 	let finishing = false;
 	let pageError = '';
 	let finishResult: OnboardingFinishResult | null = null;
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
 	let sessionToken = '';
 
 	$: steps = buildOnboardingSteps(state, !!sessionToken, finishResult !== null);
@@ -73,13 +73,13 @@
 {:else}
 	<OnboardingShell
 		{steps}
-		currentStep={4}
+		currentStep={5}
 		finished={finishResult !== null}
 		title="Review and finish."
 		intro="Check your details below. When you press finish, Rahat will seed your first schedule and explain what happens next."
 	>
 		<section class="panel active">
-			<p class="label">Step 4 · Required</p>
+			<p class="label">Step 6 · Required</p>
 			<h2>Review and finish</h2>
 			<p>Make sure your profile and tasks look right. You can still go back and edit anything before you finish.</p>
 
@@ -106,6 +106,16 @@
 								</li>
 							{/each}
 						</ul>
+					{/if}
+				</article>
+				<article>
+					<h3>Google Calendar</h3>
+					{#if state.calendar_connected}
+						<p><strong>Status:</strong> Connected</p>
+						<p>Rahat can read your calendar to plan around busy times.</p>
+					{:else}
+						<p><strong>Status:</strong> Not connected</p>
+						<p>You skipped the calendar step or it was not available. You can connect it later from settings.</p>
 					{/if}
 				</article>
 			</div>

@@ -54,9 +54,16 @@ export type TelegramStatus = {
 	deep_link?: string;
 };
 
+export type CalendarStatus = {
+	available: boolean;
+	connected: boolean;
+	auth_url?: string;
+};
+
 export type OnboardingState = {
 	has_profile: boolean;
 	telegram_linked: boolean;
+	calendar_connected: boolean;
 	user?: OnboardingProfile;
 	tasks: OnboardingTask[];
 	starter_templates: StarterTemplate[];
@@ -136,6 +143,17 @@ export function saveProfile(token: string, profile: OnboardingProfile) {
 
 export function getTelegramStatus(token: string) {
 	return request<TelegramStatus>(`/onboarding/telegram?token=${encodeURIComponent(token)}`);
+}
+
+export function getCalendarStatus(token: string) {
+	return request<CalendarStatus>(`/onboarding/calendar/status?token=${encodeURIComponent(token)}`);
+}
+
+export function disconnectCalendar(token: string) {
+	return request<{ disconnected: boolean }>(`/onboarding/calendar/disconnect?token=${encodeURIComponent(token)}`, {
+		method: 'POST',
+		body: JSON.stringify({})
+	});
 }
 
 export function skipTelegram(token: string) {
@@ -286,13 +304,21 @@ export function buildOnboardingSteps(state: OnboardingState, hasSession: boolean
 		},
 		{
 			id: 3,
+			title: 'Connect Google Calendar',
+			required: false,
+			description:
+				'Allow read-only access so Rahat can see busy times and plan around them. Skipping is fine.',
+			complete: state.calendar_connected
+		},
+		{
+			id: 4,
 			title: 'Pick at least one task',
 			required: true,
 			description: 'Choose from the starter ideas or add your own task and steps in plain language.',
 			complete: state.tasks.length > 0
 		},
 		{
-			id: 4,
+			id: 5,
 			title: 'Review and finish',
 			required: true,
 			description: 'Confirm everything looks right, let Rahat seed your first schedule, and read what happens next.',
@@ -305,11 +331,11 @@ export function nextOnboardingPath(state: OnboardingState) {
 	if (!state.has_profile) {
 		return '/onboarding/profile';
 	}
-	if (state.tasks.length > 0) {
-		return '/onboarding/review';
-	}
 	if (!state.telegram_linked) {
 		return '/onboarding/telegram';
 	}
-	return '/onboarding/tasks';
+	if (state.tasks.length === 0) {
+		return '/onboarding/calendar';
+	}
+	return '/onboarding/review';
 }

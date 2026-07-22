@@ -108,6 +108,59 @@ func TestConnectGoogleRequiresValidOAuthState(t *testing.T) {
 	}
 }
 
+func TestIsGoogleConnectedAndDisconnect(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatal(err)
+	}
+	userSvc := users.NewService(users.NewRepository(sqlDB))
+	connRepo := store.NewCalendarConnectionRepository(sqlDB)
+	blockRepo := store.NewCalendarBlockRepository(sqlDB)
+	stateRepo := store.NewOAuthStateRepository(sqlDB)
+	client := &fakeOAuthClient{authURL: "https://example.test/oauth?state="}
+	svc := NewService(userSvc, connRepo, blockRepo, stateRepo, client)
+
+	user, _ := userSvc.Create(ctx, users.User{DisplayName: "Conn", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+
+	connected, err := svc.IsGoogleConnected(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("IsGoogleConnected error = %v", err)
+	}
+	if connected {
+		t.Fatal("expected not connected")
+	}
+
+	authURL, err := svc.GoogleAuthURL(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := authURL[len("https://example.test/oauth?state="):]
+	if _, err := svc.ConnectGoogle(ctx, state, "code-123"); err != nil {
+		t.Fatalf("ConnectGoogle error = %v", err)
+	}
+
+	connected, err = svc.IsGoogleConnected(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("IsGoogleConnected error = %v", err)
+	}
+	if !connected {
+		t.Fatal("expected connected")
+	}
+
+	if err := svc.DisconnectGoogle(ctx, user.ID); err != nil {
+		t.Fatalf("DisconnectGoogle error = %v", err)
+	}
+
+	connected, err = svc.IsGoogleConnected(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("IsGoogleConnected error = %v", err)
+	}
+	if connected {
+		t.Fatal("expected not connected after disconnect")
+	}
+}
+
 func TestSyncGoogleDayStoresAllDayEventAsLargeBlock(t *testing.T) {
 	ctx := context.Background()
 	sqlDB := openTestDB(t)

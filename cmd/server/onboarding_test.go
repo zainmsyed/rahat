@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	"github.com/rahat/rahat/internal/db"
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
@@ -20,6 +22,19 @@ import (
 	taskpkg "github.com/rahat/rahat/internal/tasks"
 	usr "github.com/rahat/rahat/internal/users"
 )
+
+type fakeCalendarOAuthClient struct {
+	authURL string
+	token   calendarpkg.OAuthToken
+}
+
+func (f *fakeCalendarOAuthClient) AuthCodeURL(state string) string { return f.authURL + state }
+func (f *fakeCalendarOAuthClient) ExchangeCode(context.Context, string) (calendarpkg.OAuthToken, error) {
+	return f.token, nil
+}
+func (f *fakeCalendarOAuthClient) ListEvents(context.Context, store.CalendarConnection, time.Time, *time.Location) ([]calendarpkg.Event, error) {
+	return nil, nil
+}
 
 func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 	t.Helper()
@@ -35,7 +50,10 @@ func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 	occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
 	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
 	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+	calendarConnectionRepo := store.NewCalendarConnectionRepository(sqlDB)
+	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, &fakeCalendarOAuthClient{authURL: "https://accounts.google.test/oauth?state="})
 
 	return &onboardingHandler{
 		sessions:          newOnboardingSessionStore("rahat-beta"),
@@ -45,6 +63,8 @@ func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 		scheduler:         schedulerService,
 		telegramAvailable: true,
 		botUsername:       "RahatTestBot",
+		calendarService:   calendarService,
+		googleAvailable:   false,
 	}
 }
 
@@ -567,6 +587,161 @@ func TestOnboardingTelegramSkip(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected email preference to be upserted, got %+v", prefs)
+	}
+}
+
+func TestOnboardingCalendarStatusUnavailable(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/onboarding/calendar/status?token="+session.Token, http.NoBody)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var status onboardingCalendarStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode calendar status: %v", err)
+	}
+	if status.Available {
+		t.Fatal("expected calendar unavailable")
+	}
+	if status.Connected {
+		t.Fatal("expected not connected")
+	}
+}
+
+func TestOnboardingCalendarStatusAvailable(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	h.googleAvailable = true
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/onboarding/calendar/status?token="+session.Token, http.NoBody)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var status onboardingCalendarStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode calendar status: %v", err)
+	}
+	if !status.Available {
+		t.Fatal("expected calendar available")
+	}
+	if status.Connected {
+		t.Fatal("expected not connected")
+	}
+	if status.AuthURL == "" {
+		t.Fatal("expected non-empty auth_url")
+	}
+}
+
+func TestOnboardingCalendarDisconnect(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	h.googleAvailable = true
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	updated, _ := h.sessions.Get(session.Token)
+
+	authURL, err := h.calendarService.GoogleAuthURL(context.Background(), updated.UserID)
+	if err != nil {
+		t.Fatalf("auth url error = %v", err)
+	}
+	state := authURL[len("https://accounts.google.test/oauth?state="):]
+	if _, err := h.calendarService.ConnectGoogle(context.Background(), state, "code-123"); err != nil {
+		t.Fatalf("connect error = %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/calendar/disconnect?token="+session.Token, bytes.NewReader([]byte("{}")))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("disconnect status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var resp map[string]bool
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode disconnect response: %v", err)
+	}
+	if !resp["disconnected"] {
+		t.Fatal("expected disconnected=true")
+	}
+
+	stateReq := httptest.NewRequest(http.MethodGet, "/onboarding/state?token="+session.Token, http.NoBody)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, stateReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("state status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var gotState onboardingStateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &gotState); err != nil {
+		t.Fatalf("decode state: %v", err)
+	}
+	if gotState.CalendarConnected {
+		t.Fatal("expected calendar_connected false after disconnect")
+	}
+}
+
+func TestOnboardingCalendarDisconnectUnavailable(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	h.googleAvailable = false
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/calendar/disconnect?token="+session.Token, bytes.NewReader([]byte("{}")))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
 	}
 }
 

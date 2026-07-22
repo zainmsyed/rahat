@@ -100,6 +100,21 @@ func (s *Service) ConnectGoogle(ctx context.Context, stateToken, code string) (s
 	return s.connections.Upsert(ctx, conn)
 }
 
+func (s *Service) IsGoogleConnected(ctx context.Context, userID string) (bool, error) {
+	_, err := s.connections.GetByUserAndProvider(ctx, userID, "google")
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *Service) DisconnectGoogle(ctx context.Context, userID string) error {
+	if err := s.connections.DeleteByUserAndProvider(ctx, userID, "google"); err != nil {
+		return fmt.Errorf("disconnect google: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) SyncGoogleDay(ctx context.Context, userID string, day time.Time) ([]store.CalendarBlock, error) {
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {

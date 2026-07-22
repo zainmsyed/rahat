@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
 	"github.com/rahat/rahat/internal/scheduler"
@@ -35,6 +36,8 @@ type onboardingHandler struct {
 	logger            *slog.Logger
 	telegramAvailable bool
 	botUsername       string
+	calendarService   *calendarpkg.Service
+	googleAvailable   bool
 }
 
 type onboardingSessionStore struct {
@@ -95,12 +98,19 @@ type onboardingTelegramStatusResponse struct {
 	DeepLink    string `json:"deep_link,omitempty"`
 }
 
+type onboardingCalendarStatusResponse struct {
+	Available bool   `json:"available"`
+	Connected bool   `json:"connected"`
+	AuthURL   string `json:"auth_url,omitempty"`
+}
+
 type onboardingStateResponse struct {
-	HasProfile       bool                      `json:"has_profile"`
-	TelegramLinked   bool                      `json:"telegram_linked"`
-	User             *onboardingUserResponse   `json:"user,omitempty"`
-	Tasks            []onboardingTaskResponse  `json:"tasks"`
-	StarterTemplates []starterTemplateResponse `json:"starter_templates"`
+	HasProfile        bool                      `json:"has_profile"`
+	TelegramLinked    bool                      `json:"telegram_linked"`
+	CalendarConnected bool                      `json:"calendar_connected"`
+	User              *onboardingUserResponse   `json:"user,omitempty"`
+	Tasks             []onboardingTaskResponse  `json:"tasks"`
+	StarterTemplates  []starterTemplateResponse `json:"starter_templates"`
 }
 
 type onboardingUserResponse struct {
@@ -332,6 +342,8 @@ func (h *onboardingHandler) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /onboarding/profile", h.handleSaveProfile)
 	mux.HandleFunc("GET /onboarding/telegram", h.handleTelegramStatus)
 	mux.HandleFunc("POST /onboarding/telegram/skip", h.handleTelegramSkip)
+	mux.HandleFunc("GET /onboarding/calendar/status", h.handleCalendarStatus)
+	mux.HandleFunc("POST /onboarding/calendar/disconnect", h.handleCalendarDisconnect)
 	mux.HandleFunc("POST /onboarding/tasks/from-template", h.handleCreateTaskFromTemplate)
 	mux.HandleFunc("POST /onboarding/tasks", h.handleCreateTask)
 	mux.HandleFunc("PUT /onboarding/tasks/{taskID}", h.handleUpdateTask)
@@ -441,6 +453,49 @@ func (h *onboardingHandler) handleTelegramStatus(w http.ResponseWriter, r *http.
 		Code:        code,
 		DeepLink:    h.deepLink(code),
 	})
+}
+
+func (h *onboardingHandler) handleCalendarStatus(w http.ResponseWriter, r *http.Request) {
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
+		return
+	}
+	resp := onboardingCalendarStatusResponse{Available: h.googleAvailable}
+	if !h.googleAvailable {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	connected, err := h.calendarService.IsGoogleConnected(r.Context(), session.UserID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp.Connected = connected
+	if !connected {
+		authURL, err := h.calendarService.GoogleAuthURL(r.Context(), session.UserID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resp.AuthURL = authURL
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *onboardingHandler) handleCalendarDisconnect(w http.ResponseWriter, r *http.Request) {
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
+		return
+	}
+	if !h.googleAvailable {
+		http.Error(w, "google oauth not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.calendarService.DisconnectGoogle(r.Context(), session.UserID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"disconnected": true})
 }
 
 func (h *onboardingHandler) handleTelegramSkip(w http.ResponseWriter, r *http.Request) {
@@ -726,6 +781,7 @@ func (h *onboardingHandler) buildStateResponse(ctx context.Context, session onbo
 	}
 	state.HasProfile = true
 	state.TelegramLinked = user.TelegramChatID != ""
+	state.CalendarConnected, _ = h.calendarService.IsGoogleConnected(ctx, user.ID)
 	state.User = ptr(toUserResponse(user))
 	state.Tasks = toTaskResponses(taskDefs)
 	return state, nil

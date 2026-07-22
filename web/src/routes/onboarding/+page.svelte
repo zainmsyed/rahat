@@ -19,7 +19,7 @@
 	let loading = true;
 	let inviteCode = '';
 	let pageError = '';
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
 
 	$: steps = buildOnboardingSteps(state, false);
 

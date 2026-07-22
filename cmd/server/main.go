@@ -74,6 +74,7 @@ func main() {
 	botBaseURL := os.Getenv("TELEGRAM_API_BASE_URL")
 	botUsername := os.Getenv("TELEGRAM_BOT_USERNAME")
 	telegramAvailable := botToken != ""
+	googleAvailable := os.Getenv("GOOGLE_CLIENT_ID") != "" && os.Getenv("GOOGLE_CLIENT_SECRET") != "" && os.Getenv("GOOGLE_REDIRECT_URL") != ""
 
 	onboardingService := &onboardingHandler{
 		sessions:          newOnboardingSessionStore(os.Getenv("ONBOARDING_INVITE_CODE")),
@@ -84,6 +85,8 @@ func main() {
 		logger:            logger,
 		telegramAvailable: telegramAvailable,
 		botUsername:       botUsername,
+		calendarService:   calendarService,
+		googleAvailable:   googleAvailable,
 	}
 	onboardingService.register(mux)
 

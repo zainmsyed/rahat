@@ -89,6 +89,13 @@ func (r *CalendarConnectionRepository) Upsert(ctx context.Context, conn Calendar
 	return r.GetByUserAndProvider(ctx, conn.UserID, conn.Provider)
 }
 
+func (r *CalendarConnectionRepository) DeleteByUserAndProvider(ctx context.Context, userID, provider string) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM calendar_connections WHERE user_id = ? AND provider = ?`, userID, provider); err != nil {
+		return fmt.Errorf("delete calendar connection %s/%s: %w", userID, provider, err)
+	}
+	return nil
+}
+
 func (r *CalendarConnectionRepository) GetByUserAndProvider(ctx context.Context, userID, provider string) (CalendarConnection, error) {
 	var conn CalendarConnection
 	var refreshToken sql.NullString

@@ -20,7 +20,7 @@
 	let loading = true;
 	let skipping = false;
 	let pageError = '';
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
 	let sessionToken = '';
 	let status: TelegramStatus = { available: false, linked: false };
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -102,7 +102,7 @@
 		skipping = true;
 		try {
 			await skipTelegram(sessionToken);
-			await goto('/onboarding/tasks');
+			await goto('/onboarding/calendar');
 		} catch (error) {
 			pageError = error instanceof Error ? error.message : 'Could not skip Telegram setup.';
 		} finally {
@@ -132,7 +132,7 @@
 						You can continue with email only. If you added an email address on the previous screen,
 						Rahat will use it for recaps.
 					</p>
-					<button type="button" on:click={() => goto('/onboarding/tasks')} disabled={skipping}>
+					<button type="button" on:click={() => goto('/onboarding/calendar')} disabled={skipping}>
 						Continue with email only
 					</button>
 				</div>
@@ -140,7 +140,7 @@
 				<div class="success-banner">
 					<h3>Telegram is connected.</h3>
 					<p>You should receive a welcome message in your chat with @{status.bot_username}.</p>
-					<button type="button" on:click={() => goto('/onboarding/tasks')}>Continue to tasks</button>
+					<button type="button" on:click={() => goto('/onboarding/calendar')}>Continue to calendar</button>
 				</div>
 			{:else}
 				<div class="connection">
@@ -184,7 +184,7 @@
 			<div class="actions between">
 				<button type="button" class="ghost" on:click={() => goto('/onboarding/profile')}>Back</button>
 				{#if status.linked}
-					<button type="button" on:click={() => goto('/onboarding/tasks')}>Continue to tasks</button>
+					<button type="button" on:click={() => goto('/onboarding/calendar')}>Continue to calendar</button>
 				{/if}
 			</div>
 		</section>

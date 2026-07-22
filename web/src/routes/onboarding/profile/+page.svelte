@@ -19,7 +19,7 @@
 	let savingProfile = false;
 	let profileSaveError = '';
 	let profileErrors = { display_name: '', timezone: '', daily_time_budget_minutes: '', email: '' };
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
 	let sessionToken = '';
 	let profileDraft: OnboardingProfile = {
 		display_name: '',

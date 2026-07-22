@@ -1,9 +1,9 @@
 # Story 008: Build the guided Google Calendar connection onboarding
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** full-stack  
 **Created:** 2026-07-21  
-**Last accessed:** 2026-07-21  
+**Last accessed:** 2026-07-22  
 **Completed:** —
 
 ---
@@ -34,11 +34,11 @@ On a server with Google OAuth configured, a tester can connect calendar in one a
 ---
 
 ## Checklist
-- [ ] Present calendar connect as clearly optional and recommended, with a plain-language explanation of read-only access and why it helps
-- [ ] Show calendar as clearly unavailable when server OAuth config is missing and let the tester continue without a dead end
-- [ ] Provide one obvious connect action with a clear return path into onboarding after the Google redirect
-- [ ] Support disconnecting and reconnecting cleanly, with state reflected accurately on-screen
-- [ ] Reflect the final calendar connection state in the onboarding review step
+- [x] Present calendar connect as clearly optional and recommended, with a plain-language explanation of read-only access and why it helps
+- [x] Show calendar as clearly unavailable when server OAuth config is missing and let the tester continue without a dead end
+- [x] Provide one obvious connect action with a clear return path into onboarding after the Google redirect
+- [x] Support disconnecting and reconnecting cleanly, with state reflected accurately on-screen
+- [x] Reflect the final calendar connection state in the onboarding review step
 
 ---
 
@@ -47,3 +47,7 @@ On a server with Google OAuth configured, a tester can connect calendar in one a
 ---
 
 ## Completion Summary
+
+Added a dedicated Google Calendar onboarding step between Telegram and task selection. The backend exposes `GET /onboarding/calendar/status` (returns availability, connected state, and an auth URL) and `POST /onboarding/calendar/disconnect`, and the global onboarding state now includes `calendar_connected`. The calendar service gained `IsGoogleConnected` and `DisconnectGoogle` methods, backed by a new `DeleteByUserAndProvider` repository method.
+
+On the frontend, `web/src/routes/onboarding/calendar/+page.svelte` explains read-only access, shows a single Connect button when OAuth is configured, and lets users skip or disconnect and reconnect. `web/src/routes/onboarding/calendar/callback/+page.svelte` handles the Google redirect, exchanges the code, and returns the user to the calendar step. The onboarding stepper, navigation, and review page now reflect calendar status. All backend and frontend tests pass.

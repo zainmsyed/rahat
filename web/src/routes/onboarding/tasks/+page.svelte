@@ -27,7 +27,7 @@
 	let taskSaveError = '';
 	let addingStarterId = '';
 	let editingTaskId = '';
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
 	let sessionToken = '';
 	let taskDraft: TaskDraft = emptyTaskDraft();
 
@@ -132,14 +132,14 @@
 {:else}
 	<OnboardingShell
 		{steps}
-		currentStep={3}
+		currentStep={4}
 		title="Add at least one task."
 		intro="Start with a ready-made task or make your own. If a task works better in steps, you can break it into smaller parts."
 	>
 		<section class="panel active">
 			<div class="panel-header split">
 				<div>
-					<p class="label">Step 3 · Required</p>
+					<p class="label">Step 5 · Required</p>
 					<h2>Add at least one task</h2>
 					<p>Pick a starter idea or create your own. You only need one task to keep moving.</p>
 				</div>
@@ -212,7 +212,7 @@
 			{/if}
 
 			<div class="actions between">
-				<button type="button" class="ghost" on:click={() => goto('/onboarding/telegram')}>Back</button>
+				<button type="button" class="ghost" on:click={() => goto('/onboarding/calendar')}>Back</button>
 				<button type="button" on:click={() => goto('/onboarding/review')} disabled={state.tasks.length === 0}>Review my setup</button>
 			</div>
 		</section>
