@@ -1,0 +1,338 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+
+	"github.com/rahat/rahat/internal/db"
+	occ "github.com/rahat/rahat/internal/occurrences"
+	"github.com/rahat/rahat/internal/scheduler"
+	"github.com/rahat/rahat/internal/store"
+	taskpkg "github.com/rahat/rahat/internal/tasks"
+	usr "github.com/rahat/rahat/internal/users"
+)
+
+func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
+	t.Helper()
+
+	sqlDB, err := db.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "rahat.sqlite3"))
+	if err != nil {
+		t.Fatalf("OpenSQLite() error = %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	userService := usr.NewService(usr.NewRepository(sqlDB))
+	taskService := taskpkg.NewService(taskpkg.NewRepository(sqlDB))
+	occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+
+	return &onboardingHandler{
+		sessions:  newOnboardingSessionStore("rahat-beta"),
+		users:     userService,
+		tasks:     taskService,
+		scheduler: schedulerService,
+	}
+}
+
+func TestOnboardingSessionStoreCreateAndGet(t *testing.T) {
+	store := newOnboardingSessionStore("rahat-beta")
+
+	_, err := store.Create("wrong-code")
+	if err == nil {
+		t.Fatal("expected error for invalid invite code")
+	}
+
+	session, err := store.Create("rahat-beta")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if session.Token == "" {
+		t.Fatal("expected non-empty token")
+	}
+
+	got, err := store.Get(session.Token)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got.Token != session.Token {
+		t.Fatalf("token mismatch: got %q, want %q", got.Token, session.Token)
+	}
+
+	if err := store.AttachUser(session.Token, "user-123"); err != nil {
+		t.Fatalf("AttachUser() error = %v", err)
+	}
+	got, _ = store.Get(session.Token)
+	if got.UserID != "user-123" {
+		t.Fatalf("UserID = %q, want user-123", got.UserID)
+	}
+}
+
+func TestOnboardingCreateSessionEndpoint(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	body := bytes.NewReader([]byte(`{"invite_code":"rahat-beta"}`))
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/session", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	var resp onboardingCreateSessionResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Token == "" {
+		t.Fatal("expected token in response")
+	}
+}
+
+func TestOnboardingCreateSessionEndpointRejectsInvalidCode(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	body := bytes.NewReader([]byte(`{"invite_code":"invalid"}`))
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/session", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestOnboardingSaveProfileEndpoint(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+
+	payload := onboardingProfileRequest{
+		DisplayName:            "Test User",
+		Timezone:               "America/Chicago",
+		DailyTimeBudgetMinutes: 45,
+		Email:                  "",
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp onboardingUserResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.DisplayName != "Test User" {
+		t.Fatalf("display_name = %q, want Test User", resp.DisplayName)
+	}
+
+	updated, _ := h.sessions.Get(session.Token)
+	if updated.UserID == "" {
+		t.Fatal("expected session to be attached to user")
+	}
+}
+
+func TestOnboardingTaskEndpointsRequireProfileFirst(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/tasks?token="+session.Token, bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestOnboardingCreateAndUpdateTask(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	task := onboardingTaskRequest{
+		Name:                "Custom task",
+		DurationMinutes:     20,
+		CadenceType:         taskpkg.CadenceTypeInterval,
+		CadenceValue:        1,
+		Priority:            taskpkg.PriorityMedium,
+		TimeOfDayPreference: taskpkg.TimeOfDayMorning,
+	}
+	body, _ = json.Marshal(task)
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/tasks?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create task status = %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var created onboardingTaskResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created task: %v", err)
+	}
+	if created.Name != "Custom task" {
+		t.Fatalf("task name = %q, want Custom task", created.Name)
+	}
+
+	updatedPayload := task
+	updatedPayload.Name = "Updated task"
+	body, _ = json.Marshal(updatedPayload)
+	req = httptest.NewRequest(http.MethodPut, "/onboarding/tasks/"+created.ID+"?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update task status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestOnboardingFinishEndpoint(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 120}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	templates, _ := h.tasks.ListStarterTaskTemplates(context.Background())
+	if len(templates) == 0 {
+		t.Fatal("no starter templates found")
+	}
+	body, _ = json.Marshal(onboardingCreateStarterTaskRequest{TemplateID: templates[0].ID})
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/tasks/from-template?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("starter task status = %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("finish status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var result onboardingFinishResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode finish response: %v", err)
+	}
+	if result.TaskCount == 0 {
+		t.Fatal("expected at least one task in finish result")
+	}
+}
+
+func TestOnboardingFinishRequiresTasks(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestOnboardingInvalidTokenReturnsUnauthorized(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/onboarding/state?token=invalid", http.NoBody)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestOnboardingStateEndpoint(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	req := httptest.NewRequest(http.MethodGet, "/onboarding/state?token="+session.Token, http.NoBody)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var state onboardingStateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &state); err != nil {
+		t.Fatalf("decode state: %v", err)
+	}
+	if state.HasProfile {
+		t.Fatal("expected HasProfile to be false")
+	}
+}
+
+func BenchmarkDecodeJSON(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		body := io.NopCloser(bytes.NewReader([]byte(`{"invite_code":"rahat-beta"}`)))
+		r := httptest.NewRequest(http.MethodPost, "/onboarding/session", body)
+		var req onboardingCreateSessionRequest
+		_ = decodeJSON(r, &req)
+	}
+}

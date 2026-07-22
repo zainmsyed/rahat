@@ -219,9 +219,10 @@ export function readTokenFromUrl() {
 }
 
 export function formatTaskFrequency(task: Pick<OnboardingTask, 'cadence_type' | 'cadence_value'>) {
-	return task.cadence_type === 'interval'
-		? `Every ${task.cadence_value} day(s)`
-		: `${task.cadence_value} time(s) each week`;
+	if (task.cadence_type === 'interval') {
+		return task.cadence_value === 1 ? 'Every day' : `Every ${task.cadence_value} days`;
+	}
+	return task.cadence_value === 1 ? '1 time each week' : `${task.cadence_value} times each week`;
 }
 
 export function formatTaskSummary(task: OnboardingTask) {

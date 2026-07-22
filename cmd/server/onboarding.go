@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rahat/rahat/internal/occurrences"
 	"github.com/rahat/rahat/internal/scheduler"
 	taskpkg "github.com/rahat/rahat/internal/tasks"
 	usr "github.com/rahat/rahat/internal/users"
@@ -229,43 +228,15 @@ func randomToken() (string, error) {
 }
 
 func (h *onboardingHandler) register(mux *http.ServeMux) {
-	mux.HandleFunc("/onboarding/session", methodHandler(http.MethodPost, h.handleCreateSession))
-	mux.HandleFunc("/onboarding/state", methodHandler(http.MethodGet, h.handleState))
-	mux.HandleFunc("/onboarding/starter-tasks", methodHandler(http.MethodGet, h.handleStarterTasks))
-	mux.HandleFunc("/onboarding/profile", methodHandler(http.MethodPost, h.handleSaveProfile))
-	mux.HandleFunc("/onboarding/tasks/from-template", methodHandler(http.MethodPost, h.handleCreateTaskFromTemplate))
-	mux.HandleFunc("/onboarding/tasks", methodHandler(http.MethodPost, h.handleCreateTask))
-	mux.HandleFunc("/onboarding/tasks/", h.handleTaskByID)
-	mux.HandleFunc("/onboarding/finish", methodHandler(http.MethodPost, h.handleFinish))
-}
-
-func methodHandler(method string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != method {
-			w.Header().Set("Allow", method)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		next(w, r)
-	}
-}
-
-func (h *onboardingHandler) handleTaskByID(w http.ResponseWriter, r *http.Request) {
-	taskID := strings.TrimPrefix(r.URL.Path, "/onboarding/tasks/")
-	if taskID == "" || strings.Contains(taskID, "/") {
-		http.NotFound(w, r)
-		return
-	}
-	r.SetPathValue("taskID", taskID)
-	switch r.Method {
-	case http.MethodPut:
-		h.handleUpdateTask(w, r)
-	case http.MethodDelete:
-		h.handleDeleteTask(w, r)
-	default:
-		w.Header().Set("Allow", "PUT, DELETE")
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	}
+	mux.HandleFunc("POST /onboarding/session", h.handleCreateSession)
+	mux.HandleFunc("GET /onboarding/state", h.handleState)
+	mux.HandleFunc("GET /onboarding/starter-tasks", h.handleStarterTasks)
+	mux.HandleFunc("POST /onboarding/profile", h.handleSaveProfile)
+	mux.HandleFunc("POST /onboarding/tasks/from-template", h.handleCreateTaskFromTemplate)
+	mux.HandleFunc("POST /onboarding/tasks", h.handleCreateTask)
+	mux.HandleFunc("PUT /onboarding/tasks/{taskID}", h.handleUpdateTask)
+	mux.HandleFunc("DELETE /onboarding/tasks/{taskID}", h.handleDeleteTask)
+	mux.HandleFunc("POST /onboarding/finish", h.handleFinish)
 }
 
 func (h *onboardingHandler) handleCreateSession(w http.ResponseWriter, r *http.Request) {
@@ -340,9 +311,8 @@ func (h *onboardingHandler) handleSaveProfile(w http.ResponseWriter, r *http.Req
 }
 
 func (h *onboardingHandler) handleCreateTaskFromTemplate(w http.ResponseWriter, r *http.Request) {
-	session, err := h.requireUserSession(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
 		return
 	}
 	var req onboardingCreateStarterTaskRequest
@@ -359,9 +329,8 @@ func (h *onboardingHandler) handleCreateTaskFromTemplate(w http.ResponseWriter, 
 }
 
 func (h *onboardingHandler) handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	session, err := h.requireUserSession(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
 		return
 	}
 	var req onboardingTaskRequest
@@ -383,9 +352,8 @@ func (h *onboardingHandler) handleCreateTask(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *onboardingHandler) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
-	session, err := h.requireUserSession(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
 		return
 	}
 	taskID := strings.TrimSpace(r.PathValue("taskID"))
@@ -417,9 +385,8 @@ func (h *onboardingHandler) handleUpdateTask(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *onboardingHandler) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
-	session, err := h.requireUserSession(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
 		return
 	}
 	taskID := strings.TrimSpace(r.PathValue("taskID"))
@@ -439,9 +406,8 @@ func (h *onboardingHandler) handleDeleteTask(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *onboardingHandler) handleFinish(w http.ResponseWriter, r *http.Request) {
-	session, err := h.requireUserSession(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
 		return
 	}
 	user, err := h.users.GetByID(r.Context(), session.UserID)
@@ -475,15 +441,17 @@ func (h *onboardingHandler) requireSession(r *http.Request) (onboardingSession, 
 	return h.sessions.Get(token)
 }
 
-func (h *onboardingHandler) requireUserSession(r *http.Request) (onboardingSession, error) {
+func (h *onboardingHandler) requireUserSession(w http.ResponseWriter, r *http.Request) (onboardingSession, bool) {
 	session, err := h.requireSession(r)
 	if err != nil {
-		return onboardingSession{}, err
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return onboardingSession{}, false
 	}
 	if session.UserID == "" {
-		return onboardingSession{}, errors.New("save your profile first")
+		http.Error(w, "save your profile first", http.StatusUnauthorized)
+		return onboardingSession{}, false
 	}
-	return session, nil
+	return session, true
 }
 
 func (h *onboardingHandler) buildStateResponse(ctx context.Context, session onboardingSession) (onboardingStateResponse, error) {
@@ -707,12 +675,4 @@ func toStarterTemplateResponses(templates []taskpkg.StarterTaskTemplate) []start
 
 func ptr[T any](value T) *T {
 	return &value
-}
-
-func taskNamesForOccurrences(items []occurrences.Occurrence) []string {
-	result := make([]string, 0, len(items))
-	for _, item := range items {
-		result = append(result, item.TaskID+item.SubtaskID)
-	}
-	return result
 }

@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rahat/rahat/internal/app"
 	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	googcalendar "github.com/rahat/rahat/internal/calendar/google"
 	"github.com/rahat/rahat/internal/checkins"
@@ -50,29 +51,9 @@ func main() {
 		return
 	}
 
+	baseHandler := app.NewServer(logger, cfg, sqlDB)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"status":    "ok",
-			"service":   "rahat-api",
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
-		})
-	})
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		if err := sqlDB.PingContext(r.Context()); err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-				"status": "not-ready",
-				"error":  err.Error(),
-			})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"status":        "ready",
-			"database":      "ok",
-			"environment":   cfg.AppEnv,
-			"database_path": cfg.DatabasePath,
-		})
-	})
+	mux.Handle("/", baseHandler)
 
 	userService := usr.NewService(usr.NewRepository(sqlDB))
 	taskService := taskpkg.NewService(taskpkg.NewRepository(sqlDB))
@@ -263,8 +244,12 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func withCORS(next http.Handler) http.Handler {
+	origin := os.Getenv("WEB_ORIGIN")
+	if origin == "" {
+		origin = "http://localhost:5200"
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {

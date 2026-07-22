@@ -1,10 +1,10 @@
 # Story 006: Build the guided core onboarding flow
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** full-stack  
 **Created:** 2026-07-21  
-**Last accessed:** 2026-07-21  
-**Completed:** —
+**Last accessed:** 2026-07-22  
+**Completed:** 2026-07-22
 
 ---
 
