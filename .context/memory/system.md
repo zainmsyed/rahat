@@ -13,8 +13,8 @@
 ### From failures
 - When a SQLite pragma is connection-scoped, do not set it only once on a pooled *sql.DB; apply it for every connection or deliberately constrain the pool. <!-- source: story-001 --> <!-- confidence: low — no signal in last 5 stories -->
 - Build commands documented for fresh-clone use must be self-sufficient: they should generate required derived config/state and run on a clean install without compatibility or missing-file warnings. <!-- source: story-001 --> <!-- confidence: low — no signal in last 5 stories -->
-- When a story adds migrations, wire them into the real app/bootstrap path in the same story; test-only migration execution is not sufficient. <!-- source: story-002 --> <!-- confidence: high -->
-- Multi-row repository operations that represent one logical write must be transactional so partial state is not persisted on mid-operation failure. <!-- source: story-002 --> <!-- confidence: high -->
+- When a story adds migrations, wire them into the real app/bootstrap path in the same story; test-only migration execution is not sufficient. <!-- source: story-002 --> <!-- confidence: low — no signal in last 5 stories -->
+- Multi-row repository operations that represent one logical write must be transactional so partial state is not persisted on mid-operation failure. <!-- source: story-002 --> <!-- confidence: low — no signal in last 5 stories -->
 - When cadence is defined at the parent task level, scheduler due-logic must count task-level completion units rather than raw subtask occurrences. <!-- source: story-003 --> <!-- confidence: high -->
 - When subtask spacing rules exist, scheduler placement must enforce the actual gap value, not just broad window order. <!-- source: story-003 --> <!-- confidence: high -->
 - When an integration supports both webhooks and polling, default to the transport that works in local/dev without public infrastructure and enable webhook mode only when deployment settings clearly support it. <!-- source: story-004 --> <!-- confidence: high -->
@@ -24,3 +24,5 @@
 - Production-bound HTTP handlers must not use wildcard CORS; allowed origins must be configurable and default to the local dev origin rather than '*'. <!-- source: story-006 --> <!-- confidence: high -->
 - New backend handlers and service methods must ship with unit or integration tests covering the happy path and the main error paths. <!-- source: story-006 --> <!-- confidence: high -->
 - Generated dependency/build/runtime directories and local env files must be covered by committed VCS ignore rules before broad staging or closeout flows run, so package installs and local runs do not flood commits with machine-generated files. <!-- source: story-006 --> <!-- confidence: high -->
+- Avoid third-party services for rendering sensitive onboarding credentials; generate QR codes and similar one-user secrets locally. <!-- source: story-007 --> <!-- confidence: high -->
+- Every webhook handler must have automated tests for each update type it routes. <!-- source: story-007 --> <!-- confidence: high -->

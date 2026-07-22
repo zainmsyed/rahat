@@ -1,10 +1,10 @@
 # Story 007: Build the guided Telegram connection onboarding
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** full-stack  
 **Created:** 2026-07-21  
 **Last accessed:** 2026-07-22  
-**Completed:** —
+**Completed:** 2026-07-22
 
 ---
 
