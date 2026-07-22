@@ -59,6 +59,14 @@ func (c *HTTPBotClient) GetUpdates(ctx context.Context, req GetUpdatesRequest) (
 	return result, nil
 }
 
+func (c *HTTPBotClient) GetMe(ctx context.Context) (BotInfo, error) {
+	var result BotInfo
+	if err := c.postJSON(ctx, "getMe", map[string]any{}, &result); err != nil {
+		return BotInfo{}, err
+	}
+	return result, nil
+}
+
 func (c *HTTPBotClient) postJSON(ctx context.Context, method string, payload any, out any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -86,28 +94,20 @@ func (c *HTTPBotClient) postJSON(ctx context.Context, method string, payload any
 		return fmt.Errorf("read telegram %s response: %w", method, err)
 	}
 
-	if out == nil {
-		var envelope apiResponse[json.RawMessage]
-		if err := json.Unmarshal(responseBody, &envelope); err != nil {
-			return fmt.Errorf("decode telegram %s response: %w", method, err)
-		}
-		if !envelope.OK {
-			return fmt.Errorf("telegram %s failed: %s", method, envelope.Description)
-		}
-		return nil
-	}
-
-	rawTarget, ok := out.(*[]Update)
-	if !ok {
-		return fmt.Errorf("unsupported telegram %s response target %T", method, out)
-	}
-	var envelope apiResponse[[]Update]
+	var envelope apiResponse[json.RawMessage]
 	if err := json.Unmarshal(responseBody, &envelope); err != nil {
 		return fmt.Errorf("decode telegram %s response: %w", method, err)
 	}
 	if !envelope.OK {
 		return fmt.Errorf("telegram %s failed: %s", method, envelope.Description)
 	}
-	*rawTarget = envelope.Result
+
+	if out == nil {
+		return nil
+	}
+
+	if err := json.Unmarshal(envelope.Result, out); err != nil {
+		return fmt.Errorf("decode telegram %s result: %w", method, err)
+	}
 	return nil
 }

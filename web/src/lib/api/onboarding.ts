@@ -44,8 +44,17 @@ export type StarterTemplate = {
 	subtasks: OnboardingSubtask[];
 };
 
+export type TelegramStatus = {
+	available: boolean;
+	linked: boolean;
+	bot_username?: string;
+	code?: string;
+	deep_link?: string;
+};
+
 export type OnboardingState = {
 	has_profile: boolean;
+	telegram_linked: boolean;
 	user?: OnboardingProfile;
 	tasks: OnboardingTask[];
 	starter_templates: StarterTemplate[];
@@ -120,6 +129,17 @@ export function saveProfile(token: string, profile: OnboardingProfile) {
 	return request<OnboardingProfile>(`/onboarding/profile?token=${encodeURIComponent(token)}`, {
 		method: 'POST',
 		body: JSON.stringify(profile)
+	});
+}
+
+export function getTelegramStatus(token: string) {
+	return request<TelegramStatus>(`/onboarding/telegram?token=${encodeURIComponent(token)}`);
+}
+
+export function skipTelegram(token: string) {
+	return request<{ skipped: boolean }>(`/onboarding/telegram/skip?token=${encodeURIComponent(token)}`, {
+		method: 'POST',
+		body: JSON.stringify({})
 	});
 }
 
@@ -257,13 +277,20 @@ export function buildOnboardingSteps(state: OnboardingState, hasSession: boolean
 		},
 		{
 			id: 2,
+			title: 'Connect Telegram',
+			required: false,
+			description: 'Tap one button to open the Rahat bot, send your short code, and get interactive reminders.',
+			complete: state.telegram_linked
+		},
+		{
+			id: 3,
 			title: 'Pick at least one task',
 			required: true,
 			description: 'Choose from the starter ideas or add your own task and steps in plain language.',
 			complete: state.tasks.length > 0
 		},
 		{
-			id: 3,
+			id: 4,
 			title: 'Review and finish',
 			required: true,
 			description: 'Confirm everything looks right, let Rahat seed your first schedule, and read what happens next.',
@@ -276,8 +303,5 @@ export function nextOnboardingPath(state: OnboardingState) {
 	if (!state.has_profile) {
 		return '/onboarding/profile';
 	}
-	if (state.tasks.length === 0) {
-		return '/onboarding/tasks';
-	}
-	return '/onboarding/review';
+	return '/onboarding/telegram';
 }

@@ -21,7 +21,27 @@ type InlineButton struct {
 
 type Update struct {
 	UpdateID      int64          `json:"update_id"`
+	Message       *Message       `json:"message,omitempty"`
 	CallbackQuery *CallbackQuery `json:"callback_query,omitempty"`
+}
+
+type Message struct {
+	MessageID int64  `json:"message_id"`
+	From      *User  `json:"from,omitempty"`
+	Chat      *Chat  `json:"chat,omitempty"`
+	Text      string `json:"text"`
+}
+
+type Chat struct {
+	ID   int64  `json:"id"`
+	Type string `json:"type"`
+}
+
+type User struct {
+	ID        int64  `json:"id"`
+	IsBot     bool   `json:"is_bot"`
+	FirstName string `json:"first_name"`
+	Username  string `json:"username"`
 }
 
 type CallbackQuery struct {
@@ -34,6 +54,13 @@ type GetUpdatesRequest struct {
 	Timeout int   `json:"timeout,omitempty"`
 }
 
+type BotInfo struct {
+	ID        int64  `json:"id"`
+	IsBot     bool   `json:"is_bot"`
+	FirstName string `json:"first_name"`
+	Username  string `json:"username"`
+}
+
 type BotClient interface {
 	SendMessage(context.Context, SendMessageRequest) error
 }
@@ -43,8 +70,13 @@ type RuntimeClient interface {
 	SetWebhook(context.Context, string, string) error
 	DeleteWebhook(context.Context) error
 	GetUpdates(context.Context, GetUpdatesRequest) ([]Update, error)
+	GetMe(context.Context) (BotInfo, error)
 }
 
 type CallbackHandler interface {
 	HandleCallback(context.Context, string) error
+}
+
+type MessageHandler interface {
+	HandleMessage(context.Context, *Message) error
 }

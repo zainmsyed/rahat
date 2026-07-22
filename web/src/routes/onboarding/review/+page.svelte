@@ -20,7 +20,7 @@
 	let finishing = false;
 	let pageError = '';
 	let finishResult: OnboardingFinishResult | null = null;
-	let state: OnboardingState = { has_profile: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = { has_profile: false, telegram_linked: false, tasks: [], starter_templates: [] };
 	let sessionToken = '';
 
 	$: steps = buildOnboardingSteps(state, !!sessionToken, finishResult !== null);
@@ -73,7 +73,7 @@
 {:else}
 	<OnboardingShell
 		{steps}
-		currentStep={3}
+		currentStep={4}
 		finished={finishResult !== null}
 		title="Review and finish."
 		intro="Check your details below. When you press finish, Rahat will seed your first schedule and explain what happens next."

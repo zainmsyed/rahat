@@ -67,18 +67,38 @@ func main() {
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
 	googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
-	onboardingService := &onboardingHandler{sessions: newOnboardingSessionStore(os.Getenv("ONBOARDING_INVITE_CODE")), users: userService, tasks: taskService, scheduler: schedulerService}
-	onboardingService.register(mux)
 
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	webhookSecret := os.Getenv("TELEGRAM_WEBHOOK_SECRET")
 	webhookURL := os.Getenv("TELEGRAM_WEBHOOK_URL")
 	botBaseURL := os.Getenv("TELEGRAM_API_BASE_URL")
+	botUsername := os.Getenv("TELEGRAM_BOT_USERNAME")
+	telegramAvailable := botToken != ""
+
+	onboardingService := &onboardingHandler{
+		sessions:          newOnboardingSessionStore(os.Getenv("ONBOARDING_INVITE_CODE")),
+		users:             userService,
+		prefs:             prefService,
+		tasks:             taskService,
+		scheduler:         schedulerService,
+		telegramAvailable: telegramAvailable,
+		botUsername:       botUsername,
+	}
+	onboardingService.register(mux)
+
 	if botToken != "" {
 		bot := ntg.NewHTTPBotClient(botToken, botBaseURL)
+		onboardingService.bot = bot
+		if onboardingService.botUsername == "" {
+			if info, err := bot.GetMe(ctx); err == nil && info.Username != "" {
+				onboardingService.botUsername = info.Username
+			} else if err != nil {
+				logger.Warn("telegram getMe failed", "error", err)
+			}
+		}
 		telegramService := ntg.NewService(bot, userService, taskService, occurrenceService, eventService)
 		checkinService := checkins.NewService(bot, userService, taskService, occurrenceService, eventService, prefService)
-		transport := configureTelegramTransport(ctx, logger, mux, bot, webhookSecret, webhookURL, checkinService)
+		transport := configureTelegramTransport(ctx, logger, mux, bot, webhookSecret, webhookURL, checkinService, onboardingService)
 		logger.Info("telegram bot enabled", "transport", transport)
 
 		mux.HandleFunc("POST /telegram/send/daily", func(w http.ResponseWriter, r *http.Request) {
@@ -197,9 +217,9 @@ func main() {
 
 const telegramWebhookPath = "/webhooks/telegram"
 
-func configureTelegramTransport(ctx context.Context, logger *slog.Logger, mux *http.ServeMux, bot ntg.RuntimeClient, webhookSecret, webhookURL string, handler ntg.CallbackHandler) string {
+func configureTelegramTransport(ctx context.Context, logger *slog.Logger, mux *http.ServeMux, bot ntg.RuntimeClient, webhookSecret, webhookURL string, callbackHandler ntg.CallbackHandler, messageHandler ntg.MessageHandler) string {
 	if shouldUseTelegramWebhook(webhookURL, webhookSecret) {
-		mux.Handle(telegramWebhookPath, webhooktg.NewHandler(webhookSecret, handler))
+		mux.Handle(telegramWebhookPath, webhooktg.NewHandler(webhookSecret, callbackHandler, messageHandler))
 		if err := bot.SetWebhook(ctx, webhookURL, webhookSecret); err == nil {
 			return "webhook"
 		} else {
@@ -212,7 +232,7 @@ func configureTelegramTransport(ctx context.Context, logger *slog.Logger, mux *h
 	if err := bot.DeleteWebhook(ctx); err != nil {
 		logger.Warn("telegram deleteWebhook failed before long polling", "error", err)
 	}
-	go ntg.NewPoller(bot, handler, logger).Run(ctx)
+	go ntg.NewPoller(bot, callbackHandler, messageHandler, logger).Run(ctx)
 	return "long_polling"
 }
 

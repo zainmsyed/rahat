@@ -16,6 +16,7 @@ type fakeRuntimeClient struct {
 func (f *fakeRuntimeClient) SendMessage(context.Context, SendMessageRequest) error { return nil }
 func (f *fakeRuntimeClient) SetWebhook(context.Context, string, string) error      { return nil }
 func (f *fakeRuntimeClient) DeleteWebhook(context.Context) error                   { return nil }
+func (f *fakeRuntimeClient) GetMe(context.Context) (BotInfo, error)                { return BotInfo{}, nil }
 func (f *fakeRuntimeClient) GetUpdates(ctx context.Context, req GetUpdatesRequest) ([]Update, error) {
 	f.updatesCalls++
 	if len(f.updates) > 0 {
@@ -55,7 +56,7 @@ func TestPollerProcessesCallbackQuery(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	poller := NewPoller(client, handler, slog.Default())
+	poller := NewPoller(client, handler, nil, slog.Default())
 	go poller.Run(ctx)
 
 	select {

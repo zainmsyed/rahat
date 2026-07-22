@@ -7,23 +7,25 @@ import (
 )
 
 type Poller struct {
-	client         RuntimeClient
-	handler        CallbackHandler
-	logger         *slog.Logger
-	timeoutSeconds int
-	retryDelay     time.Duration
+	client          RuntimeClient
+	callbackHandler CallbackHandler
+	messageHandler  MessageHandler
+	logger          *slog.Logger
+	timeoutSeconds  int
+	retryDelay      time.Duration
 }
 
-func NewPoller(client RuntimeClient, handler CallbackHandler, logger *slog.Logger) *Poller {
+func NewPoller(client RuntimeClient, callbackHandler CallbackHandler, messageHandler MessageHandler, logger *slog.Logger) *Poller {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Poller{
-		client:         client,
-		handler:        handler,
-		logger:         logger,
-		timeoutSeconds: 30,
-		retryDelay:     time.Second,
+		client:          client,
+		callbackHandler: callbackHandler,
+		messageHandler:  messageHandler,
+		logger:          logger,
+		timeoutSeconds:  30,
+		retryDelay:      time.Second,
 	}
 }
 
@@ -61,8 +63,11 @@ func (p *Poller) Run(ctx context.Context) {
 }
 
 func (p *Poller) handleUpdate(ctx context.Context, update Update) error {
-	if update.CallbackQuery != nil && update.CallbackQuery.Data != "" {
-		return p.handler.HandleCallback(ctx, update.CallbackQuery.Data)
+	if update.CallbackQuery != nil && update.CallbackQuery.Data != "" && p.callbackHandler != nil {
+		return p.callbackHandler.HandleCallback(ctx, update.CallbackQuery.Data)
+	}
+	if update.Message != nil && update.Message.Chat != nil && p.messageHandler != nil {
+		return p.messageHandler.HandleMessage(ctx, update.Message)
 	}
 	return nil
 }

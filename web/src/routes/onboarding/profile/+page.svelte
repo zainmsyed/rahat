@@ -19,7 +19,7 @@
 	let savingProfile = false;
 	let profileSaveError = '';
 	let profileErrors = { display_name: '', timezone: '', daily_time_budget_minutes: '', email: '' };
-	let state: OnboardingState = { has_profile: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = { has_profile: false, telegram_linked: false, tasks: [], starter_templates: [] };
 	let sessionToken = '';
 	let profileDraft: OnboardingProfile = {
 		display_name: '',
@@ -85,7 +85,7 @@
 		savingProfile = true;
 		try {
 			await saveProfile(sessionToken, profileDraft);
-			await goto('/onboarding/tasks');
+			await goto('/onboarding/telegram');
 		} catch (error) {
 			profileSaveError = error instanceof Error ? error.message : 'Could not save your profile.';
 		} finally {

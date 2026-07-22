@@ -30,8 +30,12 @@ Key variables:
 - `RAHAT_HTTP_ADDR`: backend listen address for local runs
 - `PORT`: optional deployment override used by platforms like Coolify
 - `DATABASE_PATH`: SQLite file location
-- `WEB_ORIGIN`: reserved for future browser/API coordination
+- `WEB_ORIGIN`: allowed CORS origin for the web app
 - `VITE_API_BASE_URL`: frontend API base URL
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token for interactive reminders
+- `TELEGRAM_BOT_USERNAME`: Telegram bot username (optional; fetched from Telegram if omitted)
+- `TELEGRAM_WEBHOOK_SECRET` / `TELEGRAM_WEBHOOK_URL`: optional webhook mode for Telegram updates
+- `TELEGRAM_API_BASE_URL`: optional custom Telegram API base URL
 
 ## Local development
 

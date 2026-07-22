@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	preferences "github.com/rahat/rahat/internal/notifications/preferences"
+	ntg "github.com/rahat/rahat/internal/notifications/telegram"
 	"github.com/rahat/rahat/internal/scheduler"
 	taskpkg "github.com/rahat/rahat/internal/tasks"
 	usr "github.com/rahat/rahat/internal/users"
@@ -23,10 +25,14 @@ const defaultOnboardingInviteCode = "rahat-beta"
 var errOnboardingSessionNotFound = errors.New("onboarding session not found")
 
 type onboardingHandler struct {
-	sessions  *onboardingSessionStore
-	users     *usr.Service
-	tasks     *taskpkg.Service
-	scheduler *scheduler.Service
+	sessions          *onboardingSessionStore
+	users             *usr.Service
+	prefs             *preferences.Service
+	tasks             *taskpkg.Service
+	scheduler         *scheduler.Service
+	bot               ntg.BotClient
+	telegramAvailable bool
+	botUsername       string
 }
 
 type onboardingSessionStore struct {
@@ -37,10 +43,13 @@ type onboardingSessionStore struct {
 }
 
 type onboardingSession struct {
-	Token     string
-	UserID    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Token          string
+	UserID         string
+	TelegramCode   string
+	TelegramChatID string
+	TelegramLinked bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type onboardingProfileRequest struct {
@@ -76,8 +85,17 @@ type onboardingCreateSessionResponse struct {
 	Token string `json:"token"`
 }
 
+type onboardingTelegramStatusResponse struct {
+	Available   bool   `json:"available"`
+	Linked      bool   `json:"linked"`
+	BotUsername string `json:"bot_username,omitempty"`
+	Code        string `json:"code,omitempty"`
+	DeepLink    string `json:"deep_link,omitempty"`
+}
+
 type onboardingStateResponse struct {
 	HasProfile       bool                      `json:"has_profile"`
+	TelegramLinked   bool                      `json:"telegram_linked"`
 	User             *onboardingUserResponse   `json:"user,omitempty"`
 	Tasks            []onboardingTaskResponse  `json:"tasks"`
 	StarterTemplates []starterTemplateResponse `json:"starter_templates"`
@@ -211,6 +229,72 @@ func (s *onboardingSessionStore) AttachUser(token, userID string) error {
 	return nil
 }
 
+func (s *onboardingSessionStore) SetTelegramCode(token string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	s.pruneExpiredLocked(now)
+	session, ok := s.sessions[token]
+	if !ok {
+		return "", errOnboardingSessionNotFound
+	}
+	if session.TelegramCode != "" {
+		return session.TelegramCode, nil
+	}
+	code, err := generateOnboardingCode()
+	if err != nil {
+		return "", err
+	}
+	for s.codeExistsLocked(code) {
+		code, err = generateOnboardingCode()
+		if err != nil {
+			return "", err
+		}
+	}
+	session.TelegramCode = code
+	session.UpdatedAt = now
+	s.sessions[token] = session
+	return code, nil
+}
+
+func (s *onboardingSessionStore) GetByTelegramCode(code string) (onboardingSession, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	s.pruneExpiredLocked(now)
+	for _, session := range s.sessions {
+		if session.TelegramCode == code {
+			return session, nil
+		}
+	}
+	return onboardingSession{}, errOnboardingSessionNotFound
+}
+
+func (s *onboardingSessionStore) LinkTelegram(token, chatID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	s.pruneExpiredLocked(now)
+	session, ok := s.sessions[token]
+	if !ok {
+		return errOnboardingSessionNotFound
+	}
+	session.TelegramChatID = chatID
+	session.TelegramLinked = true
+	session.UpdatedAt = now
+	s.sessions[token] = session
+	return nil
+}
+
+func (s *onboardingSessionStore) codeExistsLocked(code string) bool {
+	for _, session := range s.sessions {
+		if session.TelegramCode == code {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *onboardingSessionStore) pruneExpiredLocked(now time.Time) {
 	for token, session := range s.sessions {
 		if now.Sub(session.UpdatedAt) > s.ttl {
@@ -227,11 +311,25 @@ func randomToken() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
+func generateOnboardingCode() (string, error) {
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	buf := make([]byte, 6)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate onboarding code: %w", err)
+	}
+	for i := range buf {
+		buf[i] = alphabet[int(buf[i])%len(alphabet)]
+	}
+	return string(buf), nil
+}
+
 func (h *onboardingHandler) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /onboarding/session", h.handleCreateSession)
 	mux.HandleFunc("GET /onboarding/state", h.handleState)
 	mux.HandleFunc("GET /onboarding/starter-tasks", h.handleStarterTasks)
 	mux.HandleFunc("POST /onboarding/profile", h.handleSaveProfile)
+	mux.HandleFunc("GET /onboarding/telegram", h.handleTelegramStatus)
+	mux.HandleFunc("POST /onboarding/telegram/skip", h.handleTelegramSkip)
 	mux.HandleFunc("POST /onboarding/tasks/from-template", h.handleCreateTaskFromTemplate)
 	mux.HandleFunc("POST /onboarding/tasks", h.handleCreateTask)
 	mux.HandleFunc("PUT /onboarding/tasks/{taskID}", h.handleUpdateTask)
@@ -308,6 +406,146 @@ func (h *onboardingHandler) handleSaveProfile(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserResponse(user))
+}
+
+func (h *onboardingHandler) handleTelegramStatus(w http.ResponseWriter, r *http.Request) {
+	session, err := h.requireSession(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if !h.telegramAvailable || h.botUsername == "" {
+		writeJSON(w, http.StatusOK, onboardingTelegramStatusResponse{Available: false})
+		return
+	}
+	if session.TelegramLinked {
+		writeJSON(w, http.StatusOK, onboardingTelegramStatusResponse{
+			Available:   true,
+			Linked:      true,
+			BotUsername: h.botUsername,
+			Code:        session.TelegramCode,
+			DeepLink:    h.deepLink(session.TelegramCode),
+		})
+		return
+	}
+	code, err := h.sessions.SetTelegramCode(session.Token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, onboardingTelegramStatusResponse{
+		Available:   true,
+		BotUsername: h.botUsername,
+		Code:        code,
+		DeepLink:    h.deepLink(code),
+	})
+}
+
+func (h *onboardingHandler) handleTelegramSkip(w http.ResponseWriter, r *http.Request) {
+	session, ok := h.requireUserSession(w, r)
+	if !ok {
+		return
+	}
+	if session.UserID != "" && h.prefs != nil {
+		user, err := h.users.GetByID(r.Context(), session.UserID)
+		if err == nil && user.Email != "" {
+			_, _ = h.prefs.Upsert(r.Context(), preferences.Preference{
+				UserID:              user.ID,
+				Channel:             preferences.ChannelEmail,
+				Enabled:             true,
+				IsPrimary:           true,
+				SupportsInteractive: false,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"skipped": true})
+}
+
+func (h *onboardingHandler) HandleMessage(ctx context.Context, msg *ntg.Message) error {
+	if msg == nil || msg.Chat == nil || msg.Chat.Type != "private" {
+		return nil
+	}
+	code := extractOnboardingCode(msg.Text)
+	if code == "" {
+		return nil
+	}
+	session, err := h.sessions.GetByTelegramCode(code)
+	if err != nil {
+		return nil
+	}
+	if session.UserID == "" {
+		return nil
+	}
+	chatID := fmt.Sprintf("%d", msg.Chat.ID)
+	if session.TelegramLinked && session.TelegramChatID == chatID {
+		return nil
+	}
+
+	user, err := h.users.GetByID(ctx, session.UserID)
+	if err != nil {
+		return err
+	}
+
+	user.TelegramChatID = chatID
+	if _, err := h.users.Update(ctx, user); err != nil {
+		return err
+	}
+	if h.prefs != nil {
+		if _, err := h.prefs.Upsert(ctx, preferences.Preference{
+			UserID:              user.ID,
+			Channel:             preferences.ChannelTelegram,
+			Enabled:             true,
+			IsPrimary:           true,
+			SupportsInteractive: true,
+		}); err != nil {
+			return err
+		}
+	}
+	if err := h.sessions.LinkTelegram(session.Token, chatID); err != nil {
+		return err
+	}
+	if h.bot != nil {
+		return h.bot.SendMessage(ctx, ntg.SendMessageRequest{
+			ChatID: chatID,
+			Text:   fmt.Sprintf("Welcome to Rahat, %s! Your Telegram is connected. You'll get interactive reminders and check-ins here.", user.DisplayName),
+		})
+	}
+	return nil
+}
+
+func (h *onboardingHandler) deepLink(code string) string {
+	if h.botUsername == "" || code == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://t.me/%s?start=%s", h.botUsername, code)
+}
+
+func extractOnboardingCode(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	parts := strings.Fields(text)
+	if len(parts) == 0 {
+		return ""
+	}
+	candidate := parts[0]
+	if strings.HasPrefix(candidate, "/start") {
+		if len(parts) < 2 {
+			return ""
+		}
+		candidate = parts[1]
+	}
+	candidate = strings.ToUpper(strings.TrimSpace(candidate))
+	if len(candidate) != 6 {
+		return ""
+	}
+	for _, r := range candidate {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return ""
+		}
+	}
+	return candidate
 }
 
 func (h *onboardingHandler) handleCreateTaskFromTemplate(w http.ResponseWriter, r *http.Request) {
@@ -472,6 +710,7 @@ func (h *onboardingHandler) buildStateResponse(ctx context.Context, session onbo
 		return onboardingStateResponse{}, err
 	}
 	state.HasProfile = true
+	state.TelegramLinked = user.TelegramChatID != ""
 	state.User = ptr(toUserResponse(user))
 	state.Tasks = toTaskResponses(taskDefs)
 	return state, nil

@@ -8,9 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rahat/rahat/internal/db"
+	preferences "github.com/rahat/rahat/internal/notifications/preferences"
+	ntg "github.com/rahat/rahat/internal/notifications/telegram"
 	occ "github.com/rahat/rahat/internal/occurrences"
 	"github.com/rahat/rahat/internal/scheduler"
 	"github.com/rahat/rahat/internal/store"
@@ -35,10 +38,13 @@ func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
 
 	return &onboardingHandler{
-		sessions:  newOnboardingSessionStore("rahat-beta"),
-		users:     userService,
-		tasks:     taskService,
-		scheduler: schedulerService,
+		sessions:          newOnboardingSessionStore("rahat-beta"),
+		users:             userService,
+		prefs:             preferences.NewService(preferences.NewRepository(sqlDB)),
+		tasks:             taskService,
+		scheduler:         schedulerService,
+		telegramAvailable: true,
+		botUsername:       "RahatTestBot",
 	}
 }
 
@@ -325,6 +331,186 @@ func TestOnboardingStateEndpoint(t *testing.T) {
 	}
 	if state.HasProfile {
 		t.Fatal("expected HasProfile to be false")
+	}
+}
+
+func TestOnboardingTelegramStatusAvailable(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/onboarding/telegram?token="+session.Token, http.NoBody)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var status onboardingTelegramStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode telegram status: %v", err)
+	}
+	if !status.Available {
+		t.Fatal("expected telegram available")
+	}
+	if status.BotUsername != "RahatTestBot" {
+		t.Fatalf("bot_username = %q, want RahatTestBot", status.BotUsername)
+	}
+	if status.Code == "" {
+		t.Fatal("expected non-empty code")
+	}
+	if status.DeepLink == "" {
+		t.Fatal("expected non-empty deep_link")
+	}
+	if status.Linked {
+		t.Fatal("expected not linked yet")
+	}
+}
+
+func TestOnboardingTelegramStatusUnavailable(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	h.telegramAvailable = false
+	h.botUsername = ""
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	req := httptest.NewRequest(http.MethodGet, "/onboarding/telegram?token="+session.Token, http.NoBody)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var status onboardingTelegramStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode telegram status: %v", err)
+	}
+	if status.Available {
+		t.Fatal("expected telegram unavailable")
+	}
+}
+
+type fakeTelegramBot struct {
+	messages []ntg.SendMessageRequest
+}
+
+func (f *fakeTelegramBot) SendMessage(_ context.Context, req ntg.SendMessageRequest) error {
+	f.messages = append(f.messages, req)
+	return nil
+}
+
+func TestOnboardingTelegramMessageLinksUser(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	bot := &fakeTelegramBot{}
+	h.bot = bot
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	code, _ := h.sessions.SetTelegramCode(session.Token)
+	msg := &ntg.Message{Text: "/start " + code, Chat: &ntg.Chat{ID: 123, Type: "private"}}
+	if err := h.HandleMessage(context.Background(), msg); err != nil {
+		t.Fatalf("HandleMessage error = %v", err)
+	}
+
+	updated, _ := h.sessions.Get(session.Token)
+	if !updated.TelegramLinked {
+		t.Fatal("expected session telegram linked")
+	}
+	if updated.TelegramChatID != "123" {
+		t.Fatalf("telegram_chat_id = %q, want 123", updated.TelegramChatID)
+	}
+
+	user, _ := h.users.GetByID(context.Background(), updated.UserID)
+	if user.TelegramChatID != "123" {
+		t.Fatalf("user telegram_chat_id = %q, want 123", user.TelegramChatID)
+	}
+
+	prefs, _ := h.prefs.ListByUser(context.Background(), updated.UserID)
+	found := false
+	for _, pref := range prefs {
+		if pref.Channel == preferences.ChannelTelegram && pref.Enabled && pref.IsPrimary && pref.SupportsInteractive {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected telegram preference to be upserted, got %+v", prefs)
+	}
+
+	if len(bot.messages) != 1 {
+		t.Fatalf("expected 1 welcome message, got %d", len(bot.messages))
+	}
+	if !strings.Contains(bot.messages[0].Text, "Welcome to Rahat") {
+		t.Fatalf("unexpected welcome message: %q", bot.messages[0].Text)
+	}
+}
+
+func TestOnboardingTelegramSkip(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60, Email: "test@example.com"}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/telegram/skip?token="+session.Token, bytes.NewReader([]byte("{}")))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("skip status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var resp map[string]bool
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode skip response: %v", err)
+	}
+	if !resp["skipped"] {
+		t.Fatal("expected skipped=true")
+	}
+
+	updated, _ := h.sessions.Get(session.Token)
+	prefs, _ := h.prefs.ListByUser(context.Background(), updated.UserID)
+	found := false
+	for _, pref := range prefs {
+		if pref.Channel == preferences.ChannelEmail && pref.Enabled && pref.IsPrimary {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected email preference to be upserted, got %+v", prefs)
 	}
 }
 

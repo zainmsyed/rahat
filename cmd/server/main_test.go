@@ -27,6 +27,7 @@ func (f *fakeRuntimeClient) DeleteWebhook(context.Context) error {
 	f.deleteWebhookCalls++
 	return nil
 }
+func (f *fakeRuntimeClient) GetMe(context.Context) (ntg.BotInfo, error) { return ntg.BotInfo{}, nil }
 func (f *fakeRuntimeClient) GetUpdates(ctx context.Context, req ntg.GetUpdatesRequest) ([]ntg.Update, error) {
 	if f.updatesCalled != nil {
 		select {
@@ -51,7 +52,7 @@ func TestConfigureTelegramTransportFallsBackToLongPollingWithoutWebhook(t *testi
 	mux := http.NewServeMux()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	transport := configureTelegramTransport(ctx, logger, mux, client, "", "", fakeCallbackHandler{})
+	transport := configureTelegramTransport(ctx, logger, mux, client, "", "", fakeCallbackHandler{}, nil)
 	if transport != "long_polling" {
 		t.Fatalf("transport = %s, want long_polling", transport)
 	}
