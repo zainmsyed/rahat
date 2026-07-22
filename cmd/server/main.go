@@ -81,6 +81,7 @@ func main() {
 		prefs:             prefService,
 		tasks:             taskService,
 		scheduler:         schedulerService,
+		logger:            logger,
 		telegramAvailable: telegramAvailable,
 		botUsername:       botUsername,
 	}

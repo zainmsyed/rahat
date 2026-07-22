@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -31,6 +32,7 @@ type onboardingHandler struct {
 	tasks             *taskpkg.Service
 	scheduler         *scheduler.Service
 	bot               ntg.BotClient
+	logger            *slog.Logger
 	telegramAvailable bool
 	botUsername       string
 }
@@ -448,14 +450,21 @@ func (h *onboardingHandler) handleTelegramSkip(w http.ResponseWriter, r *http.Re
 	}
 	if session.UserID != "" && h.prefs != nil {
 		user, err := h.users.GetByID(r.Context(), session.UserID)
-		if err == nil && user.Email != "" {
-			_, _ = h.prefs.Upsert(r.Context(), preferences.Preference{
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if user.Email != "" {
+			if _, err := h.prefs.Upsert(r.Context(), preferences.Preference{
 				UserID:              user.ID,
 				Channel:             preferences.ChannelEmail,
 				Enabled:             true,
 				IsPrimary:           true,
 				SupportsInteractive: false,
-			})
+			}); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"skipped": true})
@@ -469,14 +478,20 @@ func (h *onboardingHandler) HandleMessage(ctx context.Context, msg *ntg.Message)
 	if code == "" {
 		return nil
 	}
+	chatID := fmt.Sprintf("%d", msg.Chat.ID)
 	session, err := h.sessions.GetByTelegramCode(code)
 	if err != nil {
+		if h.logger != nil {
+			h.logger.Warn("telegram onboarding code not recognized", "chat_id", chatID, "code", code)
+		}
 		return nil
 	}
 	if session.UserID == "" {
+		if h.logger != nil {
+			h.logger.Warn("telegram onboarding code received before profile saved", "chat_id", chatID, "code", code)
+		}
 		return nil
 	}
-	chatID := fmt.Sprintf("%d", msg.Chat.ID)
 	if session.TelegramLinked && session.TelegramChatID == chatID {
 		return nil
 	}

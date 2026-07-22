@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
+	import QRCode from 'qrcode';
 	import OnboardingShell from '$lib/components/OnboardingShell.svelte';
 	import {
 		buildOnboardingSteps,
@@ -23,8 +24,14 @@
 	let sessionToken = '';
 	let status: TelegramStatus = { available: false, linked: false };
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	let qrCodeDataUrl = '';
 
 	$: steps = buildOnboardingSteps(state, !!sessionToken);
+
+	$: if (status.linked && pollTimer) {
+		clearInterval(pollTimer);
+		pollTimer = null;
+	}
 
 	onMount(async () => {
 		sessionToken = readTokenFromUrl() || getStoredOnboardingToken();
@@ -67,6 +74,9 @@
 			if (status.linked) {
 				state.telegram_linked = true;
 			}
+			if (status.deep_link) {
+				qrCodeDataUrl = await QRCode.toDataURL(status.deep_link, { width: 200, margin: 2 });
+			}
 		} catch (error) {
 			pageError = error instanceof Error ? error.message : 'Could not load Telegram status.';
 		}
@@ -100,9 +110,6 @@
 		}
 	}
 
-	function qrCodeUrl(deepLink: string): string {
-		return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(deepLink)}`;
-	}
 </script>
 
 {#if loading}
@@ -152,10 +159,10 @@
 						</div>
 					{/if}
 
-					{#if status.deep_link}
+					{#if qrCodeDataUrl}
 						<div class="qr">
 							<p>Or scan this QR code:</p>
-							<img src={qrCodeUrl(status.deep_link)} alt="Telegram bot QR code" width="200" height="200" />
+							<img src={qrCodeDataUrl} alt="Telegram bot QR code" width="200" height="200" />
 						</div>
 					{/if}
 

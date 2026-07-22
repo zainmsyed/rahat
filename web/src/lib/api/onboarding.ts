@@ -305,5 +305,11 @@ export function nextOnboardingPath(state: OnboardingState) {
 	if (!state.has_profile) {
 		return '/onboarding/profile';
 	}
-	return '/onboarding/telegram';
+	if (state.tasks.length > 0) {
+		return '/onboarding/review';
+	}
+	if (!state.telegram_linked) {
+		return '/onboarding/telegram';
+	}
+	return '/onboarding/tasks';
 }

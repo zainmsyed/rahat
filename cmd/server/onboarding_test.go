@@ -468,6 +468,62 @@ func TestOnboardingTelegramMessageLinksUser(t *testing.T) {
 	}
 }
 
+func TestExtractOnboardingCode(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{"plain code", "ABC123", "ABC123"},
+		{"start command", "/start ABC123", "ABC123"},
+		{"start with bot username", "/start@RahatBot ABC123", "ABC123"},
+		{"lowercase code", "abc123", "ABC123"},
+		{"code with whitespace", "  ABC123  ", "ABC123"},
+		{"short code", "ABC12", ""},
+		{"long code", "ABC1234", ""},
+		{"special characters", "ABC-12", ""},
+		{"empty", "", ""},
+		{"start without code", "/start", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractOnboardingCode(tc.text); got != tc.want {
+				t.Fatalf("extractOnboardingCode(%q) = %q, want %q", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestOnboardingTelegramMessageRejectsGroupChat(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	bot := &fakeTelegramBot{}
+	h.bot = bot
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	code, _ := h.sessions.SetTelegramCode(session.Token)
+	msg := &ntg.Message{Text: "/start " + code, Chat: &ntg.Chat{ID: -123, Type: "group"}}
+	if err := h.HandleMessage(context.Background(), msg); err != nil {
+		t.Fatalf("HandleMessage error = %v", err)
+	}
+
+	updated, _ := h.sessions.Get(session.Token)
+	if updated.TelegramLinked {
+		t.Fatal("expected group chat message to be ignored")
+	}
+}
+
 func TestOnboardingTelegramSkip(t *testing.T) {
 	h := newTestOnboardingHandler(t)
 	mux := http.NewServeMux()
