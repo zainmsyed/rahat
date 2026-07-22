@@ -1,3 +1,5 @@
+import { replaceState } from '$app/navigation';
+
 export type CadenceType = 'interval' | 'count';
 export type Priority = 'high' | 'medium' | 'low';
 export type TimeOfDayPreference = 'any' | 'morning' | 'afternoon' | 'evening';
@@ -91,7 +93,7 @@ export type OnboardingStep = {
 	complete: boolean;
 };
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const storageKey = 'rahat-onboarding-token';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -221,7 +223,7 @@ export function syncTokenInUrl(token: string) {
 	const url = new URL(window.location.href);
 	url.searchParams.set('token', token);
 	url.searchParams.delete('invite');
-	window.history.replaceState({}, '', url);
+	replaceState(url.toString(), {});
 }
 
 export function readInviteCodeFromUrl() {
