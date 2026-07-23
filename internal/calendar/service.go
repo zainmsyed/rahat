@@ -50,6 +50,11 @@ func (s *Service) GoogleAuthURL(ctx context.Context, userID string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("load user: %w", err)
 	}
+	if pending, err := s.states.GetPendingByUserAndProvider(ctx, user.ID, "google", s.now()); err == nil {
+		if pending.ExpiresAt.After(s.now().Add(5 * time.Minute)) {
+			return s.google.AuthCodeURL(pending.StateToken), nil
+		}
+	}
 	state, err := s.states.Create(ctx, store.OAuthState{UserID: user.ID, Provider: "google"})
 	if err != nil {
 		return "", fmt.Errorf("create google oauth state: %w", err)

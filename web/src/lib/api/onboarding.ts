@@ -100,7 +100,7 @@ export type OnboardingStep = {
 	complete: boolean;
 };
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const storageKey = 'rahat-onboarding-token';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -277,6 +277,12 @@ export function formatTaskSummary(task: OnboardingTask) {
 		parts.push(`${task.subtasks.length} step(s)`);
 	}
 	return parts.join(' · ');
+}
+
+export function formatStepLabel(step: OnboardingStep): string {
+	const number = step.id + 1;
+	const kind = step.required ? 'Required' : 'Recommended';
+	return `Step ${number} · ${kind}`;
 }
 
 export function buildOnboardingSteps(state: OnboardingState, hasSession: boolean, finished = false): OnboardingStep[] {

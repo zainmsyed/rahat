@@ -45,6 +45,35 @@ func (r *OAuthStateRepository) Create(ctx context.Context, state OAuthState) (OA
 	return state, nil
 }
 
+func (r *OAuthStateRepository) GetPendingByUserAndProvider(ctx context.Context, userID, provider string, now time.Time) (OAuthState, error) {
+	var state OAuthState
+	var expiresAt, createdAt string
+	var consumedAt sql.NullString
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT id, user_id, provider, state_token, redirect_uri, expires_at, created_at, consumed_at
+		FROM oauth_states
+		WHERE user_id = ? AND provider = ? AND consumed_at IS NULL AND expires_at > ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, userID, provider, FormatTime(now)).Scan(&state.ID, &state.UserID, &state.Provider, &state.StateToken, &state.RedirectURI, &expiresAt, &createdAt, &consumedAt); err != nil {
+		return OAuthState{}, fmt.Errorf("get pending oauth state %s/%s: %w", userID, provider, err)
+	}
+	var err error
+	state.ExpiresAt, err = ParseTime(expiresAt)
+	if err != nil {
+		return OAuthState{}, fmt.Errorf("parse oauth state expires_at: %w", err)
+	}
+	state.CreatedAt, err = ParseTime(createdAt)
+	if err != nil {
+		return OAuthState{}, fmt.Errorf("parse oauth state created_at: %w", err)
+	}
+	state.ConsumedAt, err = ParseNullableTime(consumedAt)
+	if err != nil {
+		return OAuthState{}, fmt.Errorf("parse oauth state consumed_at: %w", err)
+	}
+	return state, nil
+}
+
 func (r *OAuthStateRepository) Consume(ctx context.Context, provider, token string, now time.Time) (OAuthState, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

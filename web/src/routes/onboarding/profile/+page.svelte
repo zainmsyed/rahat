@@ -5,6 +5,7 @@
 	import {
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
+		formatStepLabel,
 		getState,
 		getStoredOnboardingToken,
 		readTokenFromUrl,
@@ -104,7 +105,7 @@
 		intro="Save the basics first: your name, your timezone, how many minutes you can usually spend on tasks in a day, and an optional email for recaps."
 	>
 		<section class="panel active">
-			<p class="label">Step 2 · Required</p>
+			<p class="label">{formatStepLabel(steps[1])}</p>
 			<h2>Tell Rahat about you</h2>
 			<p>Everything on this screen is straightforward. The email field is optional, so you can leave it blank.</p>
 

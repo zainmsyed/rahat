@@ -2,12 +2,11 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import {
+		apiBaseUrl,
 		clearStoredOnboardingToken,
 		getStoredOnboardingToken,
 		syncTokenInUrl
 	} from '$lib/api/onboarding';
-
-	const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 	let loading = true;
 	let pageError = '';

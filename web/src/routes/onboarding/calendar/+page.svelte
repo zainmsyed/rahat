@@ -6,6 +6,7 @@
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
 		disconnectCalendar,
+		formatStepLabel,
 		getCalendarStatus,
 		getState,
 		getStoredOnboardingToken,
@@ -95,7 +96,7 @@
 		intro="This step is optional. If you connect your calendar, Rahat can read your busy times and plan around them — nothing is ever written to your calendar."
 	>
 		<section class="panel active">
-			<p class="label">Step 4 · Recommended</p>
+			<p class="label">{formatStepLabel(steps[3])}</p>
 			<h2>Connect Google Calendar</h2>
 
 			{#if !status.available}

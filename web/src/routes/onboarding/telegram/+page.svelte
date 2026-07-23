@@ -6,6 +6,7 @@
 	import {
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
+		formatStepLabel,
 		getState,
 		getStoredOnboardingToken,
 		getTelegramStatus,
@@ -122,7 +123,7 @@
 		intro="Telegram is the best way to get quick check-ins and reminders. One tap opens the bot, then send your short code to link this account."
 	>
 		<section class="panel active">
-			<p class="label">Step 3 · Recommended</p>
+			<p class="label">{formatStepLabel(steps[2])}</p>
 			<h2>Connect Telegram</h2>
 
 			{#if !status.available}

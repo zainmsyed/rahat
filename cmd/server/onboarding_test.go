@@ -719,6 +719,48 @@ func TestOnboardingCalendarDisconnect(t *testing.T) {
 	}
 }
 
+func TestOnboardingStateCalendarConnectedTrue(t *testing.T) {
+	h := newTestOnboardingHandler(t)
+	h.googleAvailable = true
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 60}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	updated, _ := h.sessions.Get(session.Token)
+
+	authURL, err := h.calendarService.GoogleAuthURL(context.Background(), updated.UserID)
+	if err != nil {
+		t.Fatalf("auth url error = %v", err)
+	}
+	state := authURL[len("https://accounts.google.test/oauth?state="):]
+	if _, err := h.calendarService.ConnectGoogle(context.Background(), state, "code-123"); err != nil {
+		t.Fatalf("connect error = %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/onboarding/state?token="+session.Token, http.NoBody)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("state status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var gotState onboardingStateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &gotState); err != nil {
+		t.Fatalf("decode state: %v", err)
+	}
+	if !gotState.CalendarConnected {
+		t.Fatal("expected calendar_connected true")
+	}
+}
+
 func TestOnboardingCalendarDisconnectUnavailable(t *testing.T) {
 	h := newTestOnboardingHandler(t)
 	h.googleAvailable = false

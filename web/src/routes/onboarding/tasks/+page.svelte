@@ -10,6 +10,7 @@
 		createTask,
 		deleteTask,
 		emptyTaskDraft,
+		formatStepLabel,
 		formatTaskFrequency,
 		getState,
 		getStoredOnboardingToken,
@@ -139,7 +140,7 @@
 		<section class="panel active">
 			<div class="panel-header split">
 				<div>
-					<p class="label">Step 5 · Required</p>
+					<p class="label">{formatStepLabel(steps[4])}</p>
 					<h2>Add at least one task</h2>
 					<p>Pick a starter idea or create your own. You only need one task to keep moving.</p>
 				</div>

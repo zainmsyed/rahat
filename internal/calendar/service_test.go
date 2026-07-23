@@ -161,6 +161,51 @@ func TestIsGoogleConnectedAndDisconnect(t *testing.T) {
 	}
 }
 
+func TestGoogleAuthURLReusesPendingState(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatal(err)
+	}
+	userSvc := users.NewService(users.NewRepository(sqlDB))
+	connRepo := store.NewCalendarConnectionRepository(sqlDB)
+	blockRepo := store.NewCalendarBlockRepository(sqlDB)
+	stateRepo := store.NewOAuthStateRepository(sqlDB)
+	client := &fakeOAuthClient{authURL: "https://example.test/oauth?state="}
+	svc := NewService(userSvc, connRepo, blockRepo, stateRepo, client)
+	now := time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return now }
+
+	user, _ := userSvc.Create(ctx, users.User{DisplayName: "Reuse", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+	firstURL, err := svc.GoogleAuthURL(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("first auth url error = %v", err)
+	}
+	firstState := firstURL[len("https://example.test/oauth?state="):]
+
+	secondURL, err := svc.GoogleAuthURL(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("second auth url error = %v", err)
+	}
+	secondState := secondURL[len("https://example.test/oauth?state="):]
+	if firstState != secondState {
+		t.Fatalf("expected state reuse, got %q and %q", firstState, secondState)
+	}
+
+	// After the state is consumed, a fresh call should create a new state.
+	if _, err := svc.ConnectGoogle(ctx, firstState, "code-123"); err != nil {
+		t.Fatalf("connect error = %v", err)
+	}
+	thirdURL, err := svc.GoogleAuthURL(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("third auth url error = %v", err)
+	}
+	thirdState := thirdURL[len("https://example.test/oauth?state="):]
+	if thirdState == firstState {
+		t.Fatal("expected a new state after consumption")
+	}
+}
+
 func TestSyncGoogleDayStoresAllDayEventAsLargeBlock(t *testing.T) {
 	ctx := context.Background()
 	sqlDB := openTestDB(t)

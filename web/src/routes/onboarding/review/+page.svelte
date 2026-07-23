@@ -6,6 +6,7 @@
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
 		finishOnboarding,
+		formatStepLabel,
 		formatTaskSummary,
 		getState,
 		getStoredOnboardingToken,
@@ -79,7 +80,7 @@
 		intro="Check your details below. When you press finish, Rahat will seed your first schedule and explain what happens next."
 	>
 		<section class="panel active">
-			<p class="label">Step 6 · Required</p>
+			<p class="label">{formatStepLabel(steps[5])}</p>
 			<h2>Review and finish</h2>
 			<p>Make sure your profile and tasks look right. You can still go back and edit anything before you finish.</p>
 
@@ -115,7 +116,7 @@
 						<p>Rahat can read your calendar to plan around busy times.</p>
 					{:else}
 						<p><strong>Status:</strong> Not connected</p>
-						<p>You skipped the calendar step or it was not available. You can connect it later from settings.</p>
+						<p>You skipped the calendar step or it was not available. You can connect it later.</p>
 					{/if}
 				</article>
 			</div>
