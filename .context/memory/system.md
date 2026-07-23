@@ -15,8 +15,8 @@
 - Build commands documented for fresh-clone use must be self-sufficient: they should generate required derived config/state and run on a clean install without compatibility or missing-file warnings. <!-- source: story-001 --> <!-- confidence: low — no signal in last 5 stories -->
 - When a story adds migrations, wire them into the real app/bootstrap path in the same story; test-only migration execution is not sufficient. <!-- source: story-002 --> <!-- confidence: low — no signal in last 5 stories -->
 - Multi-row repository operations that represent one logical write must be transactional so partial state is not persisted on mid-operation failure. <!-- source: story-002 --> <!-- confidence: low — no signal in last 5 stories -->
-- When cadence is defined at the parent task level, scheduler due-logic must count task-level completion units rather than raw subtask occurrences. <!-- source: story-003 --> <!-- confidence: high -->
-- When subtask spacing rules exist, scheduler placement must enforce the actual gap value, not just broad window order. <!-- source: story-003 --> <!-- confidence: high -->
+- When cadence is defined at the parent task level, scheduler due-logic must count task-level completion units rather than raw subtask occurrences. <!-- source: story-003 --> <!-- confidence: low — no signal in last 5 stories -->
+- When subtask spacing rules exist, scheduler placement must enforce the actual gap value, not just broad window order. <!-- source: story-003 --> <!-- confidence: low — no signal in last 5 stories -->
 - When an integration supports both webhooks and polling, default to the transport that works in local/dev without public infrastructure and enable webhook mode only when deployment settings clearly support it. <!-- source: story-004 --> <!-- confidence: high -->
 - When runtime config accepts an external webhook URL, validate that the application actually serves the same webhook path or derive the served route from that URL before enabling webhook mode. <!-- source: story-004 --> <!-- confidence: high -->
 - OAuth account-link flows must verify the returned state against stored initiation context before exchanging the code or binding tokens to a local user. <!-- source: story-005 --> <!-- confidence: high -->
@@ -26,3 +26,5 @@
 - Generated dependency/build/runtime directories and local env files must be covered by committed VCS ignore rules before broad staging or closeout flows run, so package installs and local runs do not flood commits with machine-generated files. <!-- source: story-006 --> <!-- confidence: high -->
 - Avoid third-party services for rendering sensitive onboarding credentials; generate QR codes and similar one-user secrets locally. <!-- source: story-007 --> <!-- confidence: high -->
 - Every webhook handler must have automated tests for each update type it routes. <!-- source: story-007 --> <!-- confidence: high -->
+- Keep the API base URL and similar endpoint configuration in a single exported frontend constant; do not duplicate it across route modules. <!-- source: story-008 --> <!-- confidence: high -->
+- OAuth account-link flows should reuse a valid, unconsumed initiation state for the same user/session instead of generating a new state row on every page load. <!-- source: story-008 --> <!-- confidence: high -->

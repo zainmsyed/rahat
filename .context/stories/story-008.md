@@ -1,10 +1,10 @@
 # Story 008: Build the guided Google Calendar connection onboarding
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** full-stack  
 **Created:** 2026-07-21  
-**Last accessed:** 2026-07-22  
-**Completed:** —
+**Last accessed:** 2026-07-23  
+**Completed:** 2026-07-23
 
 ---
 
