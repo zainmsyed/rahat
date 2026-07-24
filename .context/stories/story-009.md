@@ -37,6 +37,7 @@ A tester can open a tokenized link on mobile and read the current today and tomo
 ## Checklist
 - [x] Add a simple token-link mechanism for read-only schedule access
 - [x] Build mobile-friendly today and tomorrow schedule views grouped by morning, afternoon, and evening
+- [x] Keep required multistep task chains together so later steps do not appear without earlier steps
 - [x] Show blocked windows and conservative calendar explanations when tasks are omitted or limited
 - [x] Remove edit controls so the page stays passive and low-maintenance
 - [x] Cover token access rules and rendered schedule states with tests or smoke checks
@@ -51,6 +52,6 @@ A tester can open a tokenized link on mobile and read the current today and tomo
 
 Added a read-only lookahead flow backed by signed HMAC tokens. The server now exposes `GET /lookahead/plan?token=...` for today/tomorrow schedule previews and a development token helper at `GET /lookahead/token?user_id=...` when token issuing is allowed. Lookahead uses `scheduler.PreviewDay`, which computes the same scheduled, overflowed, skipped, blocked-window, and budget information as the scheduler without persisting occurrences or checkpoints.
 
-The web app now has a passive `/lookahead` page that reads the token from the URL, loads the plan, and renders today and tomorrow grouped by morning, afternoon, and evening. The schedule component shows blocked calendar explanations, small-task-only warnings, omitted/limited tasks with conservative reasons, and intentionally has no edit, complete, or reschedule controls.
+The web app now has a passive `/lookahead` page that reads the token from the URL, loads the plan, and renders today and tomorrow grouped by morning, afternoon, and evening. The schedule component shows blocked calendar explanations, small-task-only warnings, omitted/limited tasks with conservative reasons, and intentionally has no edit, complete, or reschedule controls. Required multistep task chains now stay together: Rahat will not show a later step such as “move to dryer” unless the earlier required step can also be scheduled.
 
 Coverage includes token issue/verify/expiry/tamper tests, lookahead handler token-access and response tests, scheduler preview read behavior through handler tests, and frontend rendering tests for grouped tasks, blocked windows, omitted items, and absence of edit controls. `go test ./...`, `cd web && npm run check`, and `cd web && npm test` pass.
