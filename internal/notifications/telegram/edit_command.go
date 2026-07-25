@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rahat/rahat/internal/auth"
+	"github.com/rahat/rahat/internal/netutil"
 	"github.com/rahat/rahat/internal/users"
 )
 
@@ -122,7 +123,14 @@ func (h *EditCommandHandler) sendReply(ctx context.Context, chatID, text string)
 }
 
 func (h *EditCommandHandler) buildLink(rawToken string) string {
-	return h.webOrigin + "/login?token=" + url.QueryEscape(rawToken)
+	base := h.webOrigin
+	if parsed, err := url.Parse(base); err == nil && parsed.Hostname() == "localhost" {
+		if ip := netutil.PrimaryLocalIPv4(); ip != "" {
+			parsed.Host = ip + ":" + parsed.Port()
+			base = parsed.String()
+		}
+	}
+	return base + "/login?token=" + url.QueryEscape(rawToken)
 }
 
 func isEditCommand(text string) bool {

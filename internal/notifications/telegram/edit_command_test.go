@@ -32,7 +32,7 @@ func newTestEditHandler(t *testing.T) (*EditCommandHandler, *editFakeBot, *auth.
 	userService := usr.NewService(usr.NewRepository(sqlDB))
 	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), "test-secret", 30*24*time.Hour)
 	bot := &editFakeBot{}
-	handler := NewEditCommandHandler(authService, userService, bot, "http://localhost:5200", nil)
+	handler := NewEditCommandHandler(authService, userService, bot, "http://127.0.0.1:5200", nil)
 	return handler, bot, authService, userService
 }
 
@@ -69,11 +69,11 @@ func TestEditCommandIssuesLinkForLinkedChat(t *testing.T) {
 	if button.Text != "Manage my routines" {
 		t.Fatalf("button text = %q, want Manage my routines", button.Text)
 	}
-	if !strings.HasPrefix(button.URL, "http://localhost:5200/login?token=") {
+	if !strings.HasPrefix(button.URL, "http://127.0.0.1:5200/login?token=") {
 		t.Fatalf("unexpected button url: %q", button.URL)
 	}
 
-	rawToken := strings.TrimPrefix(button.URL, "http://localhost:5200/login?token=")
+	rawToken := strings.TrimPrefix(button.URL, "http://127.0.0.1:5200/login?token=")
 	session, _, err := authService.ExchangeAccessGrant(ctx, rawToken)
 	if err != nil {
 		t.Fatalf("ExchangeAccessGrant() error = %v", err)
@@ -118,11 +118,11 @@ func TestEditCommandDifferentChatsIssueDifferentLinks(t *testing.T) {
 		t.Fatal("expected different links for different chats")
 	}
 
-	sessionOne, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[0], "http://localhost:5200/login?token="))
+	sessionOne, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[0], "http://127.0.0.1:5200/login?token="))
 	if err != nil {
 		t.Fatalf("exchange first error = %v", err)
 	}
-	sessionTwo, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[1], "http://localhost:5200/login?token="))
+	sessionTwo, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[1], "http://127.0.0.1:5200/login?token="))
 	if err != nil {
 		t.Fatalf("exchange second error = %v", err)
 	}
@@ -165,7 +165,7 @@ func TestEditCommandLinkSingleUse(t *testing.T) {
 
 	_ = handler.HandleMessage(ctx, &Message{Text: "/edit", Chat: &Chat{ID: 333, Type: "private"}})
 	button := bot.messages[0].ReplyMarkup.InlineKeyboard[0][0]
-	rawToken := strings.TrimPrefix(button.URL, "http://localhost:5200/login?token=")
+	rawToken := strings.TrimPrefix(button.URL, "http://127.0.0.1:5200/login?token=")
 
 	if _, _, err := authService.ExchangeAccessGrant(ctx, rawToken); err != nil {
 		t.Fatalf("first exchange error = %v", err)

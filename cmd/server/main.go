@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/rahat/rahat/internal/config"
 	"github.com/rahat/rahat/internal/db"
 	"github.com/rahat/rahat/internal/events"
+	"github.com/rahat/rahat/internal/netutil"
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
 	occ "github.com/rahat/rahat/internal/occurrences"
@@ -81,7 +83,8 @@ func main() {
 		sessionSecret = "development-web-session-secret"
 	}
 	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), sessionSecret, 30*24*time.Hour)
-	authRoutes := &authHandler{auth: authService, users: userService, webOrigin: cfg.WebOrigin, appEnv: cfg.AppEnv}
+	devOrigins := devOriginsFor(cfg.WebOrigin)
+	authRoutes := &authHandler{auth: authService, users: userService, webOrigin: cfg.WebOrigin, appEnv: cfg.AppEnv, devOrigins: devOrigins}
 	googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
 
@@ -287,7 +290,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           withCORS(mux),
+		Handler:           withCORS(mux, cfg.WebOrigin, devOrigins, cfg.AppEnv),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -360,13 +363,21 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func withCORS(next http.Handler) http.Handler {
-	origin := os.Getenv("WEB_ORIGIN")
-	if origin == "" {
-		origin = "http://localhost:5200"
+func withCORS(next http.Handler, webOrigin string, devOrigins []string, appEnv string) http.Handler {
+	allowed := []string{strings.TrimRight(webOrigin, "/")}
+	if appEnv == "development" {
+		for _, o := range devOrigins {
+			allowed = append(allowed, strings.TrimRight(o, "/"))
+		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		for _, o := range allowed {
+			if origin == o {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -376,6 +387,31 @@ func withCORS(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func devOriginsFor(webOrigin string) []string {
+	parsed, err := url.Parse(webOrigin)
+	if err != nil {
+		return nil
+	}
+	host := parsed.Hostname()
+	if host != "localhost" && host != "127.0.0.1" {
+		return nil
+	}
+	port := parsed.Port()
+	if port == "" {
+		return nil
+	}
+	var origins []string
+	if ip := netutil.PrimaryLocalIPv4(); ip != "" {
+		origins = append(origins, fmt.Sprintf("http://%s:%s", ip, port))
+	}
+	if host == "localhost" {
+		origins = append(origins, fmt.Sprintf("http://127.0.0.1:%s", port))
+	} else {
+		origins = append(origins, fmt.Sprintf("http://localhost:%s", port))
+	}
+	return origins
 }
 
 func parseDay(value string) time.Time {

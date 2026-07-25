@@ -17,10 +17,11 @@ const sessionCookieName = "rahat_session"
 var errOriginNotAllowed = errors.New("request origin not allowed")
 
 type authHandler struct {
-	auth      *auth.Service
-	users     *usr.Service
-	webOrigin string
-	appEnv    string
+	auth       *auth.Service
+	users      *usr.Service
+	webOrigin  string
+	appEnv     string
+	devOrigins []string
 }
 
 type authExchangeRequest struct {
@@ -167,10 +168,17 @@ func (h *authHandler) requireTrustedOrigin(r *http.Request) error {
 	if origin == "" {
 		return errOriginNotAllowed
 	}
-	if origin != strings.TrimRight(h.webOrigin, "/") {
-		return errOriginNotAllowed
+	if origin == strings.TrimRight(h.webOrigin, "/") {
+		return nil
 	}
-	return nil
+	if h.appEnv == "development" {
+		for _, allowed := range h.devOrigins {
+			if origin == strings.TrimRight(allowed, "/") {
+				return nil
+			}
+		}
+	}
+	return errOriginNotAllowed
 }
 
 func (h *authHandler) writeSessionCookie(w http.ResponseWriter, rawToken string, expiresAt time.Time) {
