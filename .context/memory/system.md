@@ -28,8 +28,8 @@
 - Every webhook handler must have automated tests for each update type it routes. <!-- source: story-007 --> <!-- confidence: low — no signal in last 5 stories -->
 - Keep the API base URL and similar endpoint configuration in a single exported frontend constant; do not duplicate it across route modules. <!-- source: story-008 --> <!-- confidence: low — no signal in last 5 stories -->
 - OAuth account-link flows should reuse a valid, unconsumed initiation state for the same user/session instead of generating a new state row on every page load. <!-- source: story-008 --> <!-- confidence: low — no signal in last 5 stories -->
-- Multi-day preview endpoints must simulate state transitions between days instead of previewing each day independently from the same persisted base state. <!-- source: story-009 --> <!-- confidence: high -->
-- Dev-only token or admin helper endpoints should default off outside explicit local development and require an opt-in flag when enabled. <!-- source: story-009 --> <!-- confidence: high -->
+- Multi-day preview endpoints must simulate state transitions between days instead of previewing each day independently from the same persisted base state. <!-- source: story-009 --> <!-- confidence: low — no signal in last 5 stories -->
+- Dev-only token or admin helper endpoints should default off outside explicit local development and require an opt-in flag when enabled. <!-- source: story-009 --> <!-- confidence: low — no signal in last 5 stories -->
 - When backing up SQLite in WAL mode, do not copy only the main .sqlite3 file; create a WAL-safe snapshot or checkpointed backup and verify it can be restored cleanly. <!-- source: story-011 --> <!-- confidence: high -->
 - Batch jobs that fan out across users must derive day/window context from each user's timezone and return a machine-detectable failure when any user-level work fails. <!-- source: story-011 --> <!-- confidence: high -->
 - CLI/operator commands that print machine-readable payloads should reserve stdout for the payload and send runtime logs to stderr or suppress unrelated initialization logs. <!-- source: story-012 --> <!-- confidence: high -->
@@ -38,3 +38,5 @@
 - Every state-changing endpoint authenticated by a browser cookie must enforce the shared trusted-origin or CSRF policy and test trusted, missing, and mismatched origins. <!-- source: story-013 --> <!-- confidence: high -->
 - When an HTTP response selects Access-Control-Allow-Origin based on the request Origin, always include a Vary: Origin header. <!-- source: story-014 --> <!-- confidence: high -->
 - Do not rely solely on OS network-interface enumeration to build URLs that end users will open; always provide an explicit configuration override and use enumeration only as a fallback. <!-- source: story-014 --> <!-- confidence: high -->
+- When displaying a persisted local calendar date to a user, parse the canonical date string in the target timezone rather than formatting a UTC-midnight instant. <!-- source: story-015 --> <!-- confidence: high -->
+- Derive post-action status from the action response, not from stale client state captured before the action. <!-- source: story-015 --> <!-- confidence: high -->

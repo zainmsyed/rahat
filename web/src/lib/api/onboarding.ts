@@ -85,6 +85,7 @@ export type OnboardingFinishResult = {
 	summary: string[];
 	scheduled_items: { name: string; window: string; ready_at?: string }[];
 	next_checkpoint?: string;
+	telegram_delivered: boolean;
 };
 
 export type TaskDraft = {

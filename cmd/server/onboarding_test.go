@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"github.com/rahat/rahat/internal/auth"
 	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	"github.com/rahat/rahat/internal/db"
+	"github.com/rahat/rahat/internal/events"
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
 	occ "github.com/rahat/rahat/internal/occurrences"
@@ -39,6 +41,11 @@ func (f *fakeCalendarOAuthClient) ListEvents(context.Context, store.CalendarConn
 
 func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 	t.Helper()
+	return newTestOnboardingHandlerWithBot(t, &fakeTelegramBot{})
+}
+
+func newTestOnboardingHandlerWithBot(t *testing.T, bot ntg.BotClient) *onboardingHandler {
+	t.Helper()
 
 	sqlDB, err := db.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "rahat.sqlite3"))
 	if err != nil {
@@ -49,14 +56,17 @@ func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 	userService := usr.NewService(usr.NewRepository(sqlDB))
 	taskService := taskpkg.NewService(taskpkg.NewRepository(sqlDB))
 	occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
+	eventService := events.NewService(events.NewRepository(sqlDB))
 	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
 	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
 	calendarConnectionRepo := store.NewCalendarConnectionRepository(sqlDB)
 	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
+	onboardingConfirmationRepo := store.NewOnboardingConfirmationRepository(sqlDB)
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, &fakeCalendarOAuthClient{authURL: "https://accounts.google.test/oauth?state="})
 	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), "test-web-session-secret", 30*24*time.Hour)
 	webAuth := &authHandler{auth: authService, users: userService, webOrigin: "http://localhost:5200", appEnv: "development"}
+	telegramService := ntg.NewService(bot, userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo)
 
 	return &onboardingHandler{
 		sessions:          newOnboardingSessionStore("rahat-beta"),
@@ -66,6 +76,7 @@ func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 		scheduler:         schedulerService,
 		auth:              authService,
 		webAuth:           webAuth,
+		telegramService:   telegramService,
 		telegramAvailable: true,
 		botUsername:       "RahatTestBot",
 		calendarService:   calendarService,
@@ -303,6 +314,9 @@ func TestOnboardingFinishEndpoint(t *testing.T) {
 	if result.TaskCount == 0 {
 		t.Fatal("expected at least one task in finish result")
 	}
+	if result.TelegramDelivered {
+		t.Fatal("expected telegram_delivered=false when telegram not linked")
+	}
 }
 
 func TestOnboardingFinishRequiresTasks(t *testing.T) {
@@ -434,9 +448,13 @@ func TestOnboardingTelegramStatusUnavailable(t *testing.T) {
 
 type fakeTelegramBot struct {
 	messages []ntg.SendMessageRequest
+	err      error
 }
 
 func (f *fakeTelegramBot) SendMessage(_ context.Context, req ntg.SendMessageRequest) error {
+	if f.err != nil {
+		return f.err
+	}
 	f.messages = append(f.messages, req)
 	return nil
 }
@@ -803,5 +821,219 @@ func BenchmarkDecodeJSON(b *testing.B) {
 		r := httptest.NewRequest(http.MethodPost, "/onboarding/session", body)
 		var req onboardingCreateSessionRequest
 		_ = decodeJSON(r, &req)
+	}
+}
+
+func TestOnboardingFinishSendsTelegramConfirmation(t *testing.T) {
+	bot := &fakeTelegramBot{}
+	h := newTestOnboardingHandlerWithBot(t, bot)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 120}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	templates, _ := h.tasks.ListStarterTaskTemplates(context.Background())
+	body, _ = json.Marshal(onboardingCreateStarterTaskRequest{TemplateID: templates[0].ID})
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/tasks/from-template?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("starter task status = %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	code, _ := h.sessions.SetTelegramCode(session.Token)
+	msg := &ntg.Message{Text: "/start " + code, Chat: &ntg.Chat{ID: 123, Type: "private"}}
+	if err := h.HandleMessage(context.Background(), msg); err != nil {
+		t.Fatalf("HandleMessage error = %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+	req.Header.Set("Origin", "http://localhost:5200")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("finish status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var result onboardingFinishResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode finish response: %v", err)
+	}
+	if !result.TelegramDelivered {
+		t.Fatalf("expected telegram_delivered=true, got %+v", result)
+	}
+	if len(bot.messages) != 1 {
+		t.Fatalf("expected 1 telegram message, got %d", len(bot.messages))
+	}
+}
+
+func TestOnboardingFinishDuplicateDoesNotResend(t *testing.T) {
+	bot := &fakeTelegramBot{}
+	h := newTestOnboardingHandlerWithBot(t, bot)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 120}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	templates, _ := h.tasks.ListStarterTaskTemplates(context.Background())
+	body, _ = json.Marshal(onboardingCreateStarterTaskRequest{TemplateID: templates[0].ID})
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/tasks/from-template?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("starter task status = %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	code, _ := h.sessions.SetTelegramCode(session.Token)
+	msg := &ntg.Message{Text: "/start " + code, Chat: &ntg.Chat{ID: 123, Type: "private"}}
+	if err := h.HandleMessage(context.Background(), msg); err != nil {
+		t.Fatalf("HandleMessage error = %v", err)
+	}
+
+	finish := func() onboardingFinishResponse {
+		req := httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+		req.Header.Set("Origin", "http://localhost:5200")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("finish status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var result onboardingFinishResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+			t.Fatalf("decode finish response: %v", err)
+		}
+		return result
+	}
+
+	first := finish()
+	second := finish()
+	if !first.TelegramDelivered || !second.TelegramDelivered {
+		t.Fatalf("expected telegram_delivered=true for both finishes, got first=%v second=%v", first.TelegramDelivered, second.TelegramDelivered)
+	}
+	if len(bot.messages) != 1 {
+		t.Fatalf("expected 1 telegram message total, got %d", len(bot.messages))
+	}
+}
+
+func TestOnboardingFinishWithoutTelegramLinked(t *testing.T) {
+	bot := &fakeTelegramBot{}
+	h := newTestOnboardingHandlerWithBot(t, bot)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 120}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	templates, _ := h.tasks.ListStarterTaskTemplates(context.Background())
+	body, _ = json.Marshal(onboardingCreateStarterTaskRequest{TemplateID: templates[0].ID})
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/tasks/from-template?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("starter task status = %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+	req.Header.Set("Origin", "http://localhost:5200")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("finish status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var result onboardingFinishResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode finish response: %v", err)
+	}
+	if result.TelegramDelivered {
+		t.Fatal("expected telegram_delivered=false when telegram not linked")
+	}
+	if len(bot.messages) != 0 {
+		t.Fatalf("expected no telegram message, got %d", len(bot.messages))
+	}
+}
+
+func TestOnboardingFinishTelegramFailureStillSucceeds(t *testing.T) {
+	bot := &fakeTelegramBot{err: fmt.Errorf("telegram API returned 400")}
+	h := newTestOnboardingHandlerWithBot(t, bot)
+	mux := http.NewServeMux()
+	h.register(mux)
+
+	session, _ := h.sessions.Create("rahat-beta")
+	profile := onboardingProfileRequest{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 120}
+	body, _ := json.Marshal(profile)
+	req := httptest.NewRequest(http.MethodPost, "/onboarding/profile?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("profile save status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	templates, _ := h.tasks.ListStarterTaskTemplates(context.Background())
+	body, _ = json.Marshal(onboardingCreateStarterTaskRequest{TemplateID: templates[0].ID})
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/tasks/from-template?token="+session.Token, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("starter task status = %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	code, _ := h.sessions.SetTelegramCode(session.Token)
+	msg := &ntg.Message{Text: "/start " + code, Chat: &ntg.Chat{ID: 123, Type: "private"}}
+	if err := h.HandleMessage(context.Background(), msg); err != nil {
+		t.Fatalf("HandleMessage error = %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+	req.Header.Set("Origin", "http://localhost:5200")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("finish status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if cookie := rec.Header().Get("Set-Cookie"); !strings.Contains(cookie, sessionCookieName+"=") {
+		t.Fatalf("expected session cookie even when telegram fails, got %q", cookie)
+	}
+
+	var result onboardingFinishResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode finish response: %v", err)
+	}
+	if result.TelegramDelivered {
+		t.Fatal("expected telegram_delivered=false when send fails")
+	}
+	if len(bot.messages) != 0 {
+		t.Fatalf("expected no successful telegram message, got %d", len(bot.messages))
 	}
 }

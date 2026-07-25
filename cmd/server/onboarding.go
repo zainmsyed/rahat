@@ -36,6 +36,7 @@ type onboardingHandler struct {
 	auth              *auth.Service
 	webAuth           *authHandler
 	bot               ntg.BotClient
+	telegramService   *ntg.Service
 	logger            *slog.Logger
 	telegramAvailable bool
 	botUsername       string
@@ -176,15 +177,16 @@ type onboardingCreateStarterTaskRequest struct {
 }
 
 type onboardingFinishResponse struct {
-	Profile         onboardingUserResponse    `json:"profile"`
-	PlanDate        string                    `json:"plan_date"`
-	TaskCount       int                       `json:"task_count"`
-	ScheduledCount  int                       `json:"scheduled_count"`
-	OverflowedCount int                       `json:"overflowed_count"`
-	SkippedCount    int                       `json:"skipped_count"`
-	Summary         []string                  `json:"summary"`
-	ScheduledItems  []onboardingScheduledItem `json:"scheduled_items"`
-	NextCheckpoint  string                    `json:"next_checkpoint,omitempty"`
+	Profile           onboardingUserResponse    `json:"profile"`
+	PlanDate          string                    `json:"plan_date"`
+	TaskCount         int                       `json:"task_count"`
+	ScheduledCount    int                       `json:"scheduled_count"`
+	OverflowedCount   int                       `json:"overflowed_count"`
+	SkippedCount      int                       `json:"skipped_count"`
+	Summary           []string                  `json:"summary"`
+	ScheduledItems    []onboardingScheduledItem `json:"scheduled_items"`
+	NextCheckpoint    string                    `json:"next_checkpoint,omitempty"`
+	TelegramDelivered bool                      `json:"telegram_delivered"`
 }
 
 type onboardingScheduledItem struct {
@@ -765,7 +767,19 @@ func (h *onboardingHandler) handleFinish(w http.ResponseWriter, r *http.Request)
 		}
 		h.webAuth.writeSessionCookie(w, rawSessionToken, createdSession.ExpiresAt)
 	}
-	writeJSON(w, http.StatusOK, buildFinishResponse(user, taskDefs, plan))
+
+	telegramDelivered := false
+	if h.telegramService != nil && user.TelegramChatID != "" {
+		delivered, err := h.telegramService.SendOnboardingConfirmation(r.Context(), session.UserID, planDay, plan, taskDefs)
+		if err != nil && h.logger != nil {
+			h.logger.Warn("failed to send onboarding telegram confirmation", "user_id", session.UserID, "error", err)
+		}
+		telegramDelivered = delivered
+	}
+
+	resp := buildFinishResponse(user, taskDefs, plan)
+	resp.TelegramDelivered = telegramDelivered
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *onboardingHandler) requireSession(r *http.Request) (onboardingSession, error) {

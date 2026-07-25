@@ -72,6 +72,7 @@ func main() {
 	calendarConnectionRepo := store.NewCalendarConnectionRepository(sqlDB)
 	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
 	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
+	onboardingConfirmationRepo := store.NewOnboardingConfirmationRepository(sqlDB)
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
 	lookaheadSecret := os.Getenv("LOOKAHEAD_TOKEN_SECRET")
 	if lookaheadSecret == "" && cfg.AppEnv == "development" {
@@ -126,7 +127,8 @@ func main() {
 				logger.Warn("telegram getMe failed", "error", err)
 			}
 		}
-		telegramService = ntg.NewService(bot, userService, taskService, occurrenceService, eventService)
+		telegramService = ntg.NewService(bot, userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo)
+		onboardingService.telegramService = telegramService
 		checkinService := checkins.NewService(bot, userService, taskService, occurrenceService, eventService, prefService)
 		editHandler := ntg.NewEditCommandHandler(authService, userService, bot, cfg.WebOrigin, logger)
 		editHandler.LinkHost = os.Getenv("TELEGRAM_LINK_HOST")

@@ -150,6 +150,18 @@
 						<h4>What happens next</h4>
 						<p>Rahat has enough information to start planning your tasks.</p>
 						<p>You can come back later to review your schedule and mark progress.</p>
+						{#if finishResult.telegram_delivered}
+							<p class="telegram-status delivered">A summary was also sent to your linked Telegram chat.</p>
+						{:else if state.telegram_linked}
+							<p class="telegram-status failed">
+								We couldn't deliver the Telegram summary right now, but your schedule is saved.
+								Send <code>/edit</code> in Telegram whenever you need routine settings.
+							</p>
+						{:else}
+							<p class="telegram-status skipped">
+								Telegram wasn't linked, so no message was sent. You can still use Rahat in the browser.
+							</p>
+						{/if}
 					</article>
 				</div>
 
@@ -230,6 +242,28 @@
 		padding: 0.9rem 1rem;
 		border-radius: 1rem;
 		background: #fff1f0;
+	}
+
+	.telegram-status {
+		margin-top: 0.75rem;
+		padding: 0.75rem 0.9rem;
+		border-radius: 0.75rem;
+		font-weight: 500;
+	}
+
+	.telegram-status.delivered {
+		color: #166534;
+		background: #dcfce7;
+	}
+
+	.telegram-status.failed {
+		color: #92400e;
+		background: #fef3c7;
+	}
+
+	.telegram-status.skipped {
+		color: #1e40af;
+		background: #dbeafe;
 	}
 
 	.task-list,

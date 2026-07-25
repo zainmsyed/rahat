@@ -10,20 +10,24 @@ import (
 
 	"github.com/rahat/rahat/internal/events"
 	"github.com/rahat/rahat/internal/occurrences"
+	"github.com/rahat/rahat/internal/scheduler"
+	"github.com/rahat/rahat/internal/store"
 	"github.com/rahat/rahat/internal/tasks"
+	daytime "github.com/rahat/rahat/internal/time"
 	"github.com/rahat/rahat/internal/users"
 )
 
 type Service struct {
-	bot         BotClient
-	users       *users.Service
-	tasks       *tasks.Service
-	occurrences *occurrences.Service
-	events      *events.Service
+	bot                BotClient
+	users              *users.Service
+	tasks              *tasks.Service
+	occurrences        *occurrences.Service
+	events             *events.Service
+	confirmations      *store.OnboardingConfirmationRepository
 }
 
-func NewService(bot BotClient, usersService *users.Service, tasksService *tasks.Service, occurrenceService *occurrences.Service, eventService *events.Service) *Service {
-	return &Service{bot: bot, users: usersService, tasks: tasksService, occurrences: occurrenceService, events: eventService}
+func NewService(bot BotClient, usersService *users.Service, tasksService *tasks.Service, occurrenceService *occurrences.Service, eventService *events.Service, confirmations *store.OnboardingConfirmationRepository) *Service {
+	return &Service{bot: bot, users: usersService, tasks: tasksService, occurrences: occurrenceService, events: eventService, confirmations: confirmations}
 }
 
 func (s *Service) SendMorningBatch(ctx context.Context, userID string, day time.Time) error {
@@ -144,6 +148,146 @@ func (s *Service) logEvent(ctx context.Context, userID, occurrenceID, eventType,
 	}
 	_, err = s.events.Create(ctx, events.EventLog{UserID: userID, OccurrenceID: occurrenceID, Channel: "telegram", EventType: eventType, MessageType: messageType, PayloadJSON: string(body)})
 	return err
+}
+
+// SendOnboardingConfirmation sends a one-time Telegram summary after onboarding.
+// It is idempotent: repeated calls for the same user return the previously
+// recorded result without sending another message.
+func (s *Service) SendOnboardingConfirmation(ctx context.Context, userID string, planDate time.Time, plan scheduler.PlanResult, taskDefs []tasks.TaskWithSubtasks) (bool, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return false, fmt.Errorf("load user: %w", err)
+	}
+	if user.TelegramChatID == "" {
+		return false, nil
+	}
+
+	if s.confirmations != nil {
+		existing, found, err := s.confirmations.Get(ctx, userID)
+		if err != nil {
+			return false, fmt.Errorf("check onboarding confirmation: %w", err)
+		}
+		if found {
+			return existing.Delivered, nil
+		}
+	}
+
+	text := buildOnboardingConfirmationText(user, planDate, taskDefs, plan)
+	if err := s.bot.SendMessage(ctx, SendMessageRequest{ChatID: user.TelegramChatID, Text: text}); err != nil {
+		if s.confirmations != nil {
+			_ = s.confirmations.Record(ctx, userID, false, err.Error())
+		}
+		_ = s.logEvent(ctx, userID, "", "message_failed", "onboarding_confirmation", map[string]any{
+			"date":    plan.Date,
+			"success": false,
+			"reason":  "send failed",
+		})
+		return false, err
+	}
+
+	if s.confirmations != nil {
+		if err := s.confirmations.Record(ctx, userID, true, ""); err != nil {
+			return false, fmt.Errorf("record onboarding confirmation: %w", err)
+		}
+	}
+	_ = s.logEvent(ctx, userID, "", "message_sent", "onboarding_confirmation", map[string]any{
+		"date":    plan.Date,
+		"success": true,
+	})
+	return true, nil
+}
+
+func buildOnboardingConfirmationText(user users.User, planDate time.Time, taskDefs []tasks.TaskWithSubtasks, plan scheduler.PlanResult) string {
+	labels := labelsByTaskUnit(taskDefs)
+
+	scheduledItems := make([]scheduledItem, 0, len(plan.Scheduled))
+	for _, occurrence := range plan.Scheduled {
+		label := labels[occurrence.SubtaskID]
+		if label == "" {
+			label = labels[occurrence.TaskID]
+		}
+		if label == "" {
+			label = occurrence.TaskID
+		}
+		scheduledItems = append(scheduledItems, scheduledItem{
+			Occurrence: occurrence,
+			Label:      label,
+			Window:     string(occurrence.ScheduledTimeOfDay),
+		})
+	}
+	sort.SliceStable(scheduledItems, func(i, j int) bool {
+		leftReady := scheduledItems[i].Occurrence.ReadyAt
+		rightReady := scheduledItems[j].Occurrence.ReadyAt
+		if leftReady != nil && rightReady != nil && !leftReady.Equal(*rightReady) {
+			return leftReady.Before(*rightReady)
+		}
+		if scheduledItems[i].Window != scheduledItems[j].Window {
+			return daytime.Order(scheduledItems[i].Window) < daytime.Order(scheduledItems[j].Window)
+		}
+		return scheduledItems[i].Label < scheduledItems[j].Label
+	})
+
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	lines := []string{fmt.Sprintf("Welcome to Rahat, %s!", user.DisplayName), ""}
+
+	lines = append(lines, "Your routines are saved:")
+	for _, taskDef := range taskDefs {
+		lines = append(lines, fmt.Sprintf("- %s", taskDef.Task.Name))
+	}
+	lines = append(lines, "")
+
+	dateLabel := planDate.In(loc).Format("Monday, January 2")
+	if parsedDate, err := time.ParseInLocation("2006-01-02", plan.Date, loc); err == nil {
+		dateLabel = parsedDate.Format("Monday, January 2")
+	}
+	lines = append(lines, fmt.Sprintf("For %s:", dateLabel))
+
+	grouped := map[string][]scheduledItem{"morning": {}, "afternoon": {}, "evening": {}}
+	for _, item := range scheduledItems {
+		window := item.Window
+		if window == "" || window == string(tasks.TimeOfDayAny) {
+			window = "morning"
+		}
+		grouped[window] = append(grouped[window], item)
+	}
+
+	hasScheduled := false
+	for _, window := range []string{"morning", "afternoon", "evening"} {
+		items := grouped[window]
+		if len(items) == 0 {
+			continue
+		}
+		hasScheduled = true
+		lines = append(lines, fmt.Sprintf("%s:", strings.Title(window)))
+		for _, item := range items {
+			lines = append(lines, fmt.Sprintf("- %s", item.Label))
+		}
+	}
+	if !hasScheduled {
+		lines = append(lines, "- Nothing scheduled for this day yet.")
+	}
+	lines = append(lines, "")
+
+	if len(plan.Overflowed) > 0 || len(plan.Skipped) > 0 {
+		parts := []string{}
+		if len(plan.Overflowed) > 0 {
+			parts = append(parts, fmt.Sprintf("%d item(s) moved to a later day", len(plan.Overflowed)))
+		}
+		if len(plan.Skipped) > 0 {
+			parts = append(parts, fmt.Sprintf("%d item(s) skipped because they couldn't fit", len(plan.Skipped)))
+		}
+		lines = append(lines, fmt.Sprintf("There wasn't room for everything today: %s.", strings.Join(parts, " and ")))
+	} else {
+		lines = append(lines, "Everything that fit today is scheduled.")
+	}
+
+	lines = append(lines, "", "Rahat will send reminders here when it's time. Send /edit whenever you need routine settings, especially on a new or signed-out device.")
+
+	return strings.Join(lines, "\n")
 }
 
 func DoneAction(_ string, occurrenceID string) string   { return "d:" + occurrenceID }
