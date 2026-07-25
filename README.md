@@ -139,6 +139,7 @@ Linked testers can message `/edit` to the bot at any time to request a fresh sig
 - The link is bound server-side to the Rahat user linked to that Telegram chat.
 - It expires in 15 minutes and can only be exchanged once; replays are rejected.
 - The reply includes a single inline button labelled **Manage my routines**; forwarding the link after use does not grant access to a second session.
+- In local development, Telegram rejects `localhost` URLs inside inline keyboard buttons. If the button cannot be sent, the bot falls back to a plain-text message containing the same private link so you can copy and open it on the dev machine.
 - A valid browser session remains usable until it expires or is signed out, so testers with a session can simply reopen the app without requesting another link.
 - If a tester loses their session (new device, cleared cookies, etc.), they can send `/edit` again or ask the operator for a recovery link.
 
