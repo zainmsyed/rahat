@@ -1,6 +1,6 @@
 # Story 017: Spread recurring tasks across days and weeks
 
-**Status:** planned  
+**Status:** not-started  
 **Type:** feature  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  

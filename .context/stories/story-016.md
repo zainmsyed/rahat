@@ -1,6 +1,6 @@
 # Story 016: Make the daily scheduler fit realistic task combinations
 
-**Status:** planned  
+**Status:** not-started  
 **Type:** feature / bug-fix  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  

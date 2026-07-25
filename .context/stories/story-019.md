@@ -1,6 +1,6 @@
 # Story 019: Calendar-aware day selection and load balancing
 
-**Status:** planned  
+**Status:** not-started  
 **Type:** feature  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  

@@ -1,6 +1,6 @@
 # Story 018: Make the scheduler timezone-aware
 
-**Status:** planned  
+**Status:** not-started  
 **Type:** feature / bug-fix  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
