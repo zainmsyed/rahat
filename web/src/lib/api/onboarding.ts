@@ -33,6 +33,8 @@ export type OnboardingTask = {
 	priority: Priority;
 	time_of_day_preference: TimeOfDayPreference;
 	is_multistep: boolean;
+	is_paused?: boolean;
+	archived_at?: string;
 	subtasks: OnboardingSubtask[];
 };
 

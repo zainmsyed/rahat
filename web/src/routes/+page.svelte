@@ -19,6 +19,7 @@
 			stories.
 		</p>
 		<div class="actions">
+			<a href="/tasks">Manage routines</a>
 			<a href={`${apiBaseUrl}/healthz`} target="_blank" rel="noreferrer">API health endpoint</a>
 			<a href={`${apiBaseUrl}/readyz`} target="_blank" rel="noreferrer">API readiness endpoint</a>
 		</div>

@@ -110,6 +110,7 @@ func main() {
 	}
 	onboardingService.register(mux)
 	authRoutes.register(mux)
+	(&taskManagementHandler{auth: authRoutes, tasks: taskService}).register(mux)
 	(&lookaheadHandler{tokens: lookaheadTokens, users: userService, tasks: taskService, scheduler: schedulerService, allowTokenIssue: os.Getenv("LOOKAHEAD_TOKEN_ISSUER_ENABLED") == "true"}).register(mux)
 
 	if botToken != "" {

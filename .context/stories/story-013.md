@@ -1,6 +1,6 @@
 # Story 013: Add post-onboarding task management
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
@@ -44,21 +44,23 @@ A signed-in tester can open the task page, create and edit a routine using the e
 ---
 
 ## Checklist
-- [ ] Add authenticated task APIs for list, create, update, pause/resume, and safe removal, deriving ownership only from the authenticated session
-- [ ] Introduce archive/removal semantics that preserve completed occurrence and event history instead of cascading historical records away
-- [ ] Ensure archived and paused tasks are handled correctly by due generation, previews, and future schedule runs
-- [ ] Reuse and, where needed, extract the onboarding `TaskEditor` and task mapping logic rather than duplicating forms and validation
-- [ ] Build a calm `/tasks` page with active, paused, and removed-state feedback plus clear add/edit actions
-- [ ] Keep subtask dependency metadata internal while preserving it correctly through edits
-- [ ] Add confirmation and explanatory copy for pause, resume, and remove actions
-- [ ] Ensure task changes do not rewrite completed history and document how pending/future scheduling responds to edits
-- [ ] Add backend tests for ownership isolation, validation, archive/history preservation, pause/resume, and scheduling effects
-- [ ] Add frontend tests for listing, create/edit, pause/resume, remove confirmation, authentication failure, and main error states
+- [x] Add authenticated task APIs for list, create, update, pause/resume, and safe removal, deriving ownership only from the authenticated session
+- [x] Introduce archive/removal semantics that preserve completed occurrence and event history instead of cascading historical records away
+- [x] Ensure archived and paused tasks are handled correctly by due generation, previews, and future schedule runs
+- [x] Reuse and, where needed, extract the onboarding `TaskEditor` and task mapping logic rather than duplicating forms and validation
+- [x] Build a calm `/tasks` page with active, paused, and removed-state feedback plus clear add/edit actions
+- [x] Keep subtask dependency metadata internal while preserving it correctly through edits
+- [x] Add confirmation and explanatory copy for pause, resume, and remove actions
+- [x] Ensure task changes do not rewrite completed history and document how pending/future scheduling responds to edits
+- [x] Add backend tests for ownership isolation, validation, archive/history preservation, pause/resume, and scheduling effects
+- [x] Add frontend tests for listing, create/edit, pause/resume, remove confirmation, authentication failure, and main error states
 
 ---
 
 ## Issues
+- Go tooling is not available in this agent PATH (`gofmt: command not found`, `go: no go in PATH`), so backend tests and gofmt could not be executed in this environment. Frontend tests and Svelte checks passed.
 
 ---
 
 ## Completion Summary
+Implemented authenticated post-onboarding task management with archived removal semantics, pause/resume support, scheduler filtering through active task listing, a calm `/tasks` UI reusing `TaskEditor`, API helpers, documentation, and backend/frontend tests. Removed tasks are archived instead of deleted so completed occurrence and event history remain intact; paused and archived routines are excluded from future previews/schedule runs.

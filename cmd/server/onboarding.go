@@ -134,6 +134,8 @@ type onboardingTaskResponse struct {
 	Priority            taskpkg.Priority            `json:"priority"`
 	TimeOfDayPreference taskpkg.TimeOfDayPreference `json:"time_of_day_preference"`
 	IsMultistep         bool                        `json:"is_multistep"`
+	IsPaused            bool                        `json:"is_paused"`
+	ArchivedAt          string                      `json:"archived_at,omitempty"`
 	Subtasks            []onboardingSubtaskResponse `json:"subtasks"`
 }
 
@@ -995,7 +997,11 @@ func toTaskResponse(taskDef taskpkg.TaskWithSubtasks) onboardingTaskResponse {
 	for _, subtask := range taskDef.Subtasks {
 		subtasks = append(subtasks, onboardingSubtaskResponse{ID: subtask.ID, Name: subtask.Name, DurationMinutes: subtask.DurationMinutes, TimeOfDayPreference: subtask.TimeOfDayPreference, DependencyType: subtask.DependencyType, MinGapAfterPreviousMinutes: subtask.GapRule.MinGapAfterPreviousMinutes})
 	}
-	return onboardingTaskResponse{ID: taskDef.Task.ID, Name: taskDef.Task.Name, Description: taskDef.Task.Description, DurationMinutes: taskDef.Task.DurationMinutes, CadenceType: taskDef.Task.CadenceType, CadenceValue: taskDef.Task.CadenceValue, Priority: taskDef.Task.Priority, TimeOfDayPreference: taskDef.Task.TimeOfDayPreference, IsMultistep: taskDef.Task.IsMultistep, Subtasks: subtasks}
+	resp := onboardingTaskResponse{ID: taskDef.Task.ID, Name: taskDef.Task.Name, Description: taskDef.Task.Description, DurationMinutes: taskDef.Task.DurationMinutes, CadenceType: taskDef.Task.CadenceType, CadenceValue: taskDef.Task.CadenceValue, Priority: taskDef.Task.Priority, TimeOfDayPreference: taskDef.Task.TimeOfDayPreference, IsMultistep: taskDef.Task.IsMultistep, IsPaused: taskDef.Task.IsPaused, Subtasks: subtasks}
+	if taskDef.Task.ArchivedAt != nil {
+		resp.ArchivedAt = taskDef.Task.ArchivedAt.Format(time.RFC3339)
+	}
+	return resp
 }
 
 func toStarterTemplateResponses(templates []taskpkg.StarterTaskTemplate) []starterTemplateResponse {

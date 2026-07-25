@@ -49,6 +49,7 @@ type Task struct {
 	TimeOfDayPreference TimeOfDayPreference
 	IsMultistep         bool
 	IsPaused            bool
+	ArchivedAt          *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

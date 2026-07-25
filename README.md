@@ -111,6 +111,14 @@ RAHAT_RESET_CONFIRM=reset-non-production bash scripts/reset-nonprod.sh
 
 All scripts source `.env` automatically when it exists and call the matching `go run ./cmd/server ops:...` command.
 
+## Post-onboarding routine management
+
+Signed-in testers can open `/tasks` to manage routines after onboarding. The page uses the same guided task editor as onboarding for create/edit, and offers confirmation-backed pause, resume, and remove actions.
+
+- Paused routines remain visible but are excluded from new due generation, previews, and future schedule runs until resumed.
+- Removed routines are archived with `archived_at`; they are no longer edited or scheduled, but task rows, subtasks, completed occurrences, and event history are preserved for reporting/history.
+- Edits update the routine definition for future scheduling only. Completed occurrence history is not rewritten.
+
 ## Beta web sessions
 
 Story 012 adds durable beta browser sessions backed by secure HttpOnly cookies rather than permanent onboarding tokens.

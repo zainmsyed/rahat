@@ -96,6 +96,10 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 	return s.repo.DeleteTask(ctx, taskID)
 }
 
+func (s *Service) ArchiveTask(ctx context.Context, taskID string) error {
+	return s.repo.ArchiveTask(ctx, taskID)
+}
+
 func (s *Service) GetTaskWithSubtasks(ctx context.Context, taskID string) (TaskWithSubtasks, error) {
 	task, err := s.repo.GetTaskByID(ctx, taskID)
 	if err != nil {
@@ -116,6 +120,22 @@ func (s *Service) ListTasksByUser(ctx context.Context, userID string) ([]Task, e
 	return s.repo.ListTasksByUser(ctx, userID)
 }
 
+func (s *Service) ListTaskWithSubtasksByUserIncludingArchived(ctx context.Context, userID string) ([]TaskWithSubtasks, error) {
+	tasksForUser, err := s.repo.ListTasksByUserIncludingArchived(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]TaskWithSubtasks, 0, len(tasksForUser))
+	for _, task := range tasksForUser {
+		subtasks, err := s.repo.ListSubtasksByTask(ctx, task.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, TaskWithSubtasks{Task: task, Subtasks: subtasks})
+	}
+	return result, nil
+}
+
 func (s *Service) UpdateSubtask(ctx context.Context, subtask Subtask) (Subtask, error) {
 	return s.repo.UpdateSubtask(ctx, subtask)
 }
@@ -125,12 +145,7 @@ func (s *Service) DeleteSubtask(ctx context.Context, subtaskID string) error {
 }
 
 func (s *Service) PauseTask(ctx context.Context, taskID string, paused bool) (Task, error) {
-	task, err := s.repo.GetTaskByID(ctx, taskID)
-	if err != nil {
-		return Task{}, err
-	}
-	task.IsPaused = paused
-	return s.repo.UpdateTask(ctx, task)
+	return s.repo.SetTaskPaused(ctx, taskID, paused)
 }
 
 func (s *Service) ListStarterTaskTemplates(ctx context.Context) ([]StarterTaskTemplate, error) {

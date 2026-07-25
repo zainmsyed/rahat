@@ -189,8 +189,18 @@
 	select {
 		padding: 0.8rem 0.9rem;
 		border-radius: 0.85rem;
-		border: 1px solid #cbd5e1;
+		border: 1.5px solid #e3dccc;
 		font: inherit;
+		color: #1f1d1a;
+		background: #ffffff;
+	}
+
+	input:focus,
+	textarea:focus,
+	select:focus {
+		outline: none;
+		border-color: #7a9b76;
+		box-shadow: 0 0 0 4px rgba(122, 155, 118, 0.22);
 	}
 
 	textarea {
@@ -200,8 +210,8 @@
 	.subtasks {
 		padding: 1rem;
 		border-radius: 1rem;
-		background: #f8fafc;
-		border: 1px solid #dbe4ee;
+		background: #f4f0e6;
+		border: 1px solid #ebe5d8;
 	}
 
 	.subtask-header,
@@ -222,21 +232,21 @@
 	.subtask-card {
 		margin-top: 1rem;
 		padding-top: 1rem;
-		border-top: 1px solid #dbe4ee;
+		border-top: 1px solid #e3dccc;
 		display: grid;
 		gap: 0.8rem;
 	}
 
 	.empty {
 		margin-top: 0.75rem;
-		color: #5d6b82;
+		color: #8a8278;
 	}
 
 	button {
 		padding: 0.8rem 1rem;
 		border: none;
 		border-radius: 999px;
-		background: #2a6df4;
+		background: #7a9b76;
 		color: white;
 		font: inherit;
 		font-weight: 700;
@@ -245,8 +255,8 @@
 
 	button.ghost {
 		background: white;
-		color: #1e293b;
-		border: 1px solid #cbd5e1;
+		color: #4a4640;
+		border: 1.5px solid #e3dccc;
 	}
 
 	button:disabled {
@@ -255,7 +265,7 @@
 	}
 
 	.error {
-		color: #b42318;
+		color: #8f3d3d;
 		font-weight: 600;
 	}
 

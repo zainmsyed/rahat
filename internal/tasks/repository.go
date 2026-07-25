@@ -74,32 +74,40 @@ func (r *Repository) GetTaskByID(ctx context.Context, id string) (Task, error) {
 	var task Task
 	var createdAt string
 	var updatedAt string
+	var archivedAt sql.NullString
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, created_at, updated_at
+		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, archived_at, created_at, updated_at
 		FROM tasks
 		WHERE id = ?
-	`, id).Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.IsMultistep, &task.IsPaused, &createdAt, &updatedAt); err != nil {
+	`, id).Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.IsMultistep, &task.IsPaused, &archivedAt, &createdAt, &updatedAt); err != nil {
 		return Task{}, fmt.Errorf("get task %s: %w", id, err)
 	}
 
-	var err error
-	task.CreatedAt, err = store.ParseTime(createdAt)
-	if err != nil {
-		return Task{}, fmt.Errorf("parse task created_at: %w", err)
-	}
-	task.UpdatedAt, err = store.ParseTime(updatedAt)
-	if err != nil {
-		return Task{}, fmt.Errorf("parse task updated_at: %w", err)
+	if err := parseTaskTimes(&task, createdAt, updatedAt, archivedAt); err != nil {
+		return Task{}, err
 	}
 
 	return task, nil
 }
 
 func (r *Repository) DeleteTask(ctx context.Context, id string) error {
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM tasks WHERE id = ?`, id); err != nil {
-		return fmt.Errorf("delete task %s: %w", id, err)
+	return r.ArchiveTask(ctx, id)
+}
+
+func (r *Repository) ArchiveTask(ctx context.Context, id string) error {
+	now := store.FormatTime(time.Now().UTC())
+	if _, err := r.db.ExecContext(ctx, `UPDATE tasks SET archived_at = COALESCE(archived_at, ?), updated_at = ? WHERE id = ?`, now, now, id); err != nil {
+		return fmt.Errorf("archive task %s: %w", id, err)
 	}
 	return nil
+}
+
+func (r *Repository) SetTaskPaused(ctx context.Context, id string, paused bool) (Task, error) {
+	now := store.FormatTime(time.Now().UTC())
+	if _, err := r.db.ExecContext(ctx, `UPDATE tasks SET is_paused = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL`, paused, now, id); err != nil {
+		return Task{}, fmt.Errorf("set task paused %s: %w", id, err)
+	}
+	return r.GetTaskByID(ctx, id)
 }
 
 func (r *Repository) ListTaskWithSubtasksByUser(ctx context.Context, userID string) ([]TaskWithSubtasks, error) {
@@ -120,11 +128,23 @@ func (r *Repository) ListTaskWithSubtasksByUser(ctx context.Context, userID stri
 }
 
 func (r *Repository) ListTasksByUser(ctx context.Context, userID string) ([]Task, error) {
+	return r.listTasksByUser(ctx, userID, false)
+}
+
+func (r *Repository) ListTasksByUserIncludingArchived(ctx context.Context, userID string) ([]Task, error) {
+	return r.listTasksByUser(ctx, userID, true)
+}
+
+func (r *Repository) listTasksByUser(ctx context.Context, userID string, includeArchived bool) ([]Task, error) {
+	where := `WHERE user_id = ? AND archived_at IS NULL`
+	if includeArchived {
+		where = `WHERE user_id = ?`
+	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, created_at, updated_at
+		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, archived_at, created_at, updated_at
 		FROM tasks
-		WHERE user_id = ?
-		ORDER BY created_at, id
+		`+where+`
+		ORDER BY archived_at IS NOT NULL, created_at, id
 	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks for user %s: %w", userID, err)
@@ -136,19 +156,37 @@ func (r *Repository) ListTasksByUser(ctx context.Context, userID string) ([]Task
 		var task Task
 		var createdAt string
 		var updatedAt string
-		if err := rows.Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.IsMultistep, &task.IsPaused, &createdAt, &updatedAt); err != nil {
+		var archivedAt sql.NullString
+		if err := rows.Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.IsMultistep, &task.IsPaused, &archivedAt, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scan task row: %w", err)
 		}
-		if task.CreatedAt, err = store.ParseTime(createdAt); err != nil {
-			return nil, fmt.Errorf("parse task created_at: %w", err)
-		}
-		if task.UpdatedAt, err = store.ParseTime(updatedAt); err != nil {
-			return nil, fmt.Errorf("parse task updated_at: %w", err)
+		if err := parseTaskTimes(&task, createdAt, updatedAt, archivedAt); err != nil {
+			return nil, err
 		}
 		tasks = append(tasks, task)
 	}
 
 	return tasks, rows.Err()
+}
+
+func parseTaskTimes(task *Task, createdAt, updatedAt string, archivedAt sql.NullString) error {
+	var err error
+	task.CreatedAt, err = store.ParseTime(createdAt)
+	if err != nil {
+		return fmt.Errorf("parse task created_at: %w", err)
+	}
+	task.UpdatedAt, err = store.ParseTime(updatedAt)
+	if err != nil {
+		return fmt.Errorf("parse task updated_at: %w", err)
+	}
+	if archivedAt.Valid && archivedAt.String != "" {
+		parsed, err := store.ParseTime(archivedAt.String)
+		if err != nil {
+			return fmt.Errorf("parse task archived_at: %w", err)
+		}
+		task.ArchivedAt = &parsed
+	}
+	return nil
 }
 
 func (r *Repository) CreateSubtask(ctx context.Context, subtask Subtask) (Subtask, error) {
