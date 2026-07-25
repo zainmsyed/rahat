@@ -22,6 +22,20 @@ func (f *editFakeBot) SendMessage(_ context.Context, req SendMessageRequest) err
 	return nil
 }
 
+type failingThenOkBot struct {
+	messages      []SendMessageRequest
+	failRemaining int
+}
+
+func (f *failingThenOkBot) SendMessage(_ context.Context, req SendMessageRequest) error {
+	if f.failRemaining > 0 {
+		f.failRemaining--
+		return errors.New("sendMessage failed")
+	}
+	f.messages = append(f.messages, req)
+	return nil
+}
+
 func newTestEditHandler(t *testing.T) (*EditCommandHandler, *editFakeBot, *auth.Service, *usr.Service) {
 	t.Helper()
 	sqlDB, err := db.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "rahat.sqlite3"))
@@ -175,6 +189,45 @@ func TestEditCommandLinkSingleUse(t *testing.T) {
 	}
 }
 
+func TestEditCommandFallbackToPlainText(t *testing.T) {
+	ctx := context.Background()
+	sqlDB, err := db.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "rahat.sqlite3"))
+	if err != nil {
+		t.Fatalf("OpenSQLite() error = %v", err)
+	}
+	defer sqlDB.Close()
+	userService := usr.NewService(usr.NewRepository(sqlDB))
+	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), "test-secret", 30*24*time.Hour)
+
+	user, err := userService.Create(ctx, usr.User{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := userService.LinkTelegramChat(ctx, user.ID, "444"); err != nil {
+		t.Fatalf("LinkTelegramChat() error = %v", err)
+	}
+
+	bot := &failingThenOkBot{failRemaining: 1}
+	handler := NewEditCommandHandler(authService, userService, bot, "http://127.0.0.1:5200", nil)
+	if err := handler.HandleMessage(ctx, &Message{Text: "/edit", Chat: &Chat{ID: 444, Type: "private"}}); err != nil {
+		t.Fatalf("HandleMessage() error = %v", err)
+	}
+
+	if len(bot.messages) != 1 {
+		t.Fatalf("expected 1 fallback message, got %d", len(bot.messages))
+	}
+	msg := bot.messages[0]
+	if msg.ReplyMarkup != nil {
+		t.Fatal("expected no inline keyboard in fallback message")
+	}
+	if !strings.Contains(msg.Text, "http://127.0.0.1:5200/login?token=") {
+		t.Fatalf("fallback message missing link: %q", msg.Text)
+	}
+	if !strings.Contains(msg.Text, "Do not forward it") {
+		t.Fatalf("fallback message missing warning: %q", msg.Text)
+	}
+}
+
 func TestEditCommandGroupChatIgnored(t *testing.T) {
 	handler, bot, _, _ := newTestEditHandler(t)
 	ctx := context.Background()
@@ -205,12 +258,4 @@ func TestIsEditCommand(t *testing.T) {
 			t.Fatalf("isEditCommand(%q) = %v, want %v", tc.text, got, tc.want)
 		}
 	}
-}
-
-func parseChatID(s string) int64 {
-	var n int64
-	for _, r := range s {
-		n = n*10 + int64(r-'0')
-	}
-	return n
 }

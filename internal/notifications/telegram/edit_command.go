@@ -24,6 +24,7 @@ type EditCommandHandler struct {
 	users     *users.Service
 	bot       BotClient
 	webOrigin string
+	LinkHost  string
 	logger    *slog.Logger
 }
 
@@ -124,10 +125,19 @@ func (h *EditCommandHandler) sendReply(ctx context.Context, chatID, text string)
 
 func (h *EditCommandHandler) buildLink(rawToken string) string {
 	base := h.webOrigin
-	if parsed, err := url.Parse(base); err == nil && parsed.Hostname() == "localhost" {
-		if ip := netutil.PrimaryLocalIPv4(); ip != "" {
-			parsed.Host = ip + ":" + parsed.Port()
+	if parsed, err := url.Parse(base); err == nil {
+		if h.LinkHost != "" {
+			parsed.Host = h.LinkHost
 			base = parsed.String()
+		} else if parsed.Hostname() == "localhost" {
+			if ip := netutil.PrimaryLocalIPv4(); ip != "" {
+				host := ip
+				if port := parsed.Port(); port != "" {
+					host = host + ":" + port
+				}
+				parsed.Host = host
+				base = parsed.String()
+			}
 		}
 	}
 	return base + "/login?token=" + url.QueryEscape(rawToken)

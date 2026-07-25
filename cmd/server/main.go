@@ -129,6 +129,7 @@ func main() {
 		telegramService = ntg.NewService(bot, userService, taskService, occurrenceService, eventService)
 		checkinService := checkins.NewService(bot, userService, taskService, occurrenceService, eventService, prefService)
 		editHandler := ntg.NewEditCommandHandler(authService, userService, bot, cfg.WebOrigin, logger)
+		editHandler.LinkHost = os.Getenv("TELEGRAM_LINK_HOST")
 		messageRouter := &telegramMessageRouter{onboarding: onboardingService, edit: editHandler}
 		transport := configureTelegramTransport(ctx, logger, mux, bot, webhookSecret, webhookURL, checkinService, messageRouter)
 		logger.Info("telegram bot enabled", "transport", transport)
@@ -375,6 +376,7 @@ func withCORS(next http.Handler, webOrigin string, devOrigins []string, appEnv s
 		for _, o := range allowed {
 			if origin == o {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
 				break
 			}
 		}

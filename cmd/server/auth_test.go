@@ -229,6 +229,31 @@ func TestExchangeAccessLinkAlwaysCreatesSessionForGrantUser(t *testing.T) {
 	}
 }
 
+func TestRequireTrustedOriginAllowsDevOrigins(t *testing.T) {
+	h := &authHandler{
+		auth:       nil,
+		users:      nil,
+		webOrigin:  "http://localhost:5200",
+		appEnv:     "development",
+		devOrigins: []string{"http://127.0.0.1:5200", "http://192.168.1.50:5200"},
+	}
+	localReq := httptest.NewRequest(http.MethodPost, "/auth/access-link/exchange", http.NoBody)
+	localReq.Header.Set("Origin", "http://localhost:5200")
+	if err := h.requireTrustedOrigin(localReq); err != nil {
+		t.Fatalf("expected localhost origin to be allowed, got %v", err)
+	}
+	ipReq := httptest.NewRequest(http.MethodPost, "/auth/access-link/exchange", http.NoBody)
+	ipReq.Header.Set("Origin", "http://192.168.1.50:5200")
+	if err := h.requireTrustedOrigin(ipReq); err != nil {
+		t.Fatalf("expected dev IP origin to be allowed, got %v", err)
+	}
+	badReq := httptest.NewRequest(http.MethodPost, "/auth/access-link/exchange", http.NoBody)
+	badReq.Header.Set("Origin", "http://evil.example.com")
+	if err := h.requireTrustedOrigin(badReq); err == nil {
+		t.Fatal("expected untrusted origin to be rejected")
+	}
+}
+
 func TestProductionCookieUsesSecureFlag(t *testing.T) {
 	h := &authHandler{appEnv: "production"}
 	rec := httptest.NewRecorder()
