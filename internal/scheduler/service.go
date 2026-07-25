@@ -135,6 +135,121 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 	}, nil
 }
 
+func (s *Service) PreviewDay(ctx context.Context, userID string, day time.Time) (PlanResult, error) {
+	user, taskDefs, allOccurrences, err := s.loadPreviewInputs(ctx, userID)
+	if err != nil {
+		return PlanResult{}, err
+	}
+	result, _, err := s.previewDayWithOccurrences(ctx, user, taskDefs, allOccurrences, day)
+	return result, err
+}
+
+func (s *Service) PreviewRange(ctx context.Context, userID string, startDay time.Time, days int) ([]PlanResult, error) {
+	if days < 1 {
+		return nil, nil
+	}
+	user, taskDefs, allOccurrences, err := s.loadPreviewInputs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]PlanResult, 0, days)
+	state := cloneOccurrences(allOccurrences)
+	for i := 0; i < days; i++ {
+		result, nextState, err := s.previewDayWithOccurrences(ctx, user, taskDefs, state, startDay.Add(time.Duration(i)*24*time.Hour))
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+		state = nextState
+	}
+	return results, nil
+}
+
+func (s *Service) loadPreviewInputs(ctx context.Context, userID string) (users.User, []tasks.TaskWithSubtasks, []occurrences.Occurrence, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return users.User{}, nil, nil, fmt.Errorf("load user: %w", err)
+	}
+	tasksWithSubtasks, err := s.tasks.ListTaskWithSubtasksByUser(ctx, userID)
+	if err != nil {
+		return users.User{}, nil, nil, fmt.Errorf("load tasks: %w", err)
+	}
+	allOccurrences, err := s.occurrences.ListByUser(ctx, userID)
+	if err != nil {
+		return users.User{}, nil, nil, fmt.Errorf("load occurrences: %w", err)
+	}
+	return user, tasksWithSubtasks, allOccurrences, nil
+}
+
+func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User, taskDefs []tasks.TaskWithSubtasks, allOccurrences []occurrences.Occurrence, day time.Time) (PlanResult, []occurrences.Occurrence, error) {
+	planDate := day.UTC()
+	planDateStr := store.FormatDate(planDate)
+	backlog, current, history := splitOccurrences(allOccurrences, planDateStr)
+	calendarBlocks, err := s.blocks.ListByUserAndDate(ctx, user.ID, planDateStr)
+	if err != nil {
+		return PlanResult{}, nil, fmt.Errorf("load calendar blocks: %w", err)
+	}
+	constraints := buildCalendarConstraints(calendarBlocks)
+
+	candidates, err := s.buildCandidates(ctx, taskDefs, history, backlog, current, planDate)
+	if err != nil {
+		return PlanResult{}, nil, err
+	}
+
+	windowBudgets := splitWindowBudgets(user.DailyTimeBudgetMinutes, candidates)
+	applyCalendarBudgets(windowBudgets, constraints)
+	scheduled, overflowed, skipped := fitCandidates(candidates, windowBudgets, planDate, constraints)
+
+	previewScheduled := make([]occurrences.Occurrence, 0, len(scheduled))
+	for _, candidate := range scheduled {
+		occurrence := candidate.Occurrence
+		occurrence.Status = occurrences.StatusScheduled
+		occurrence.ScheduledForDate = planDateStr
+		occurrence.ScheduledTimeOfDay = candidate.Window
+		previewScheduled = append(previewScheduled, occurrence)
+	}
+
+	previewOverflowed := make([]occurrences.Occurrence, 0, len(overflowed))
+	for _, candidate := range overflowed {
+		occurrence := candidate.Occurrence
+		occurrence.Status = occurrences.StatusPending
+		occurrence.ScheduledForDate = store.FormatDate(planDate.Add(24 * time.Hour))
+		occurrence.ScheduledTimeOfDay = candidate.Window
+		occurrence.RolloverCount++
+		previewOverflowed = append(previewOverflowed, occurrence)
+	}
+
+	previewSkipped := make([]occurrences.Occurrence, 0, len(skipped))
+	for _, candidate := range skipped {
+		occurrence := candidate.Occurrence
+		occurrence.Status = occurrences.StatusSkipped
+		occurrence.RolloverCount++
+		now := s.clock.Now()
+		occurrence.SkippedAt = &now
+		previewSkipped = append(previewSkipped, occurrence)
+	}
+
+	checkpoint := store.ScheduleCheckpoint{
+		UserID:                   user.ID,
+		ScheduleDate:             planDateStr,
+		NextCheckpointAt:         nextCheckpoint(planDate, previewScheduled),
+		ScheduledOccurrenceCount: len(previewScheduled),
+		GeneratedAt:              s.clock.Now(),
+	}
+
+	result := PlanResult{
+		Date:                 planDateStr,
+		Scheduled:            previewScheduled,
+		Overflowed:           previewOverflowed,
+		Skipped:              previewSkipped,
+		Checkpoint:           checkpoint,
+		WindowBudgetsMinutes: windowBudgets,
+		BlockedWindows:       constraints.BlockedWindows,
+		SmallTaskOnlyReason:  constraints.SmallTaskOnlyReason,
+	}
+	return result, applyPreviewResults(allOccurrences, previewScheduled, previewOverflowed, previewSkipped), nil
+}
+
 type scheduledCandidate struct {
 	Occurrence occurrences.Occurrence
 	Task       tasks.Task
@@ -242,6 +357,55 @@ func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWith
 	})
 
 	return candidates, nil
+}
+
+func cloneOccurrences(all []occurrences.Occurrence) []occurrences.Occurrence {
+	cloned := make([]occurrences.Occurrence, 0, len(all))
+	for _, occurrence := range all {
+		cloned = append(cloned, cloneOccurrence(occurrence))
+	}
+	return cloned
+}
+
+func cloneOccurrence(occurrence occurrences.Occurrence) occurrences.Occurrence {
+	cloned := occurrence
+	if occurrence.ReadyAt != nil {
+		readyAt := occurrence.ReadyAt.UTC()
+		cloned.ReadyAt = &readyAt
+	}
+	if occurrence.SkippedAt != nil {
+		skippedAt := occurrence.SkippedAt.UTC()
+		cloned.SkippedAt = &skippedAt
+	}
+	return cloned
+}
+
+func applyPreviewResults(existing, scheduled, overflowed, skipped []occurrences.Occurrence) []occurrences.Occurrence {
+	state := cloneOccurrences(existing)
+	for _, occurrence := range scheduled {
+		state = upsertPreviewOccurrence(state, occurrence)
+	}
+	for _, occurrence := range overflowed {
+		state = upsertPreviewOccurrence(state, occurrence)
+	}
+	for _, occurrence := range skipped {
+		state = upsertPreviewOccurrence(state, occurrence)
+	}
+	return state
+}
+
+func upsertPreviewOccurrence(state []occurrences.Occurrence, updated occurrences.Occurrence) []occurrences.Occurrence {
+	for idx, occurrence := range state {
+		if updated.ID != "" && occurrence.ID == updated.ID {
+			state[idx] = cloneOccurrence(updated)
+			return state
+		}
+		if occurrence.TaskID == updated.TaskID && occurrence.SubtaskID == updated.SubtaskID && occurrence.OriginalScheduledForDate == updated.OriginalScheduledForDate {
+			state[idx] = cloneOccurrence(updated)
+			return state
+		}
+	}
+	return append(state, cloneOccurrence(updated))
 }
 
 func splitOccurrences(all []occurrences.Occurrence, planDate string) (backlog, current, history []occurrences.Occurrence) {
@@ -473,68 +637,159 @@ func fitCandidates(candidates []scheduledCandidate, budgets map[string]int, plan
 	used := map[string]int{"morning": 0, "afternoon": 0, "evening": 0}
 	stepWindows := map[string]int{}
 	stepReadyAt := map[string]time.Time{}
+	processedSubtaskTasks := map[string]bool{}
 
 	for _, candidate := range candidates {
-		window := string(candidate.Window)
-		if window == "" || window == string(tasks.TimeOfDayAny) {
-			window = "morning"
-		}
-		candidate.Window = tasks.TimeOfDayPreference(window)
-
-		readyAt := daytime.StartTime(planDate, window)
 		if candidate.Subtask != nil {
-			prevWindow, ok := stepWindows[candidate.Task.ID]
-			currentWindow := daytime.Order(window)
-			if candidate.Subtask.StepOrder > 1 && ok && currentWindow < prevWindow {
-				currentWindow = prevWindow
-				switch currentWindow {
-				case 0:
-					window = "morning"
-				case 1:
-					window = "afternoon"
-				default:
-					window = "evening"
-				}
-				candidate.Window = tasks.TimeOfDayPreference(window)
-				readyAt = daytime.StartTime(planDate, window)
-			}
-			if prevReady, ok := stepReadyAt[candidate.Task.ID]; ok {
-				minReady := prevReady.Add(time.Duration(candidate.Subtask.GapRule.MinGapAfterPreviousMinutes) * time.Minute)
-				if minReady.After(readyAt) {
-					readyAt = minReady
-				}
-				if shiftedWindow, ok := daytime.WindowForTime(planDate, readyAt); ok {
-					window = shiftedWindow
-					candidate.Window = tasks.TimeOfDayPreference(window)
-				} else {
-					window = "evening"
-					candidate.Window = tasks.TimeOfDayPreference(window)
-					readyAt = daytime.EndTime(planDate, window)
-				}
-			}
-		}
-		candidate.Occurrence.ReadyAt = &readyAt
-
-		if constraints.SmallTaskOnlyReason != "" && candidate.Duration > 15 {
-			nextRollover := candidate.Occurrence.RolloverCount + 1
-			if candidate.Task.Priority != tasks.PriorityHigh && nextRollover >= rolloverCap {
-				skipped = append(skipped, candidate)
+			if processedSubtaskTasks[candidate.Task.ID] {
 				continue
 			}
-			overflowed = append(overflowed, candidate)
-			continue
-		}
-
-		if used[window]+candidate.Duration <= budgets[window] {
-			used[window] += candidate.Duration
-			if candidate.Subtask != nil {
-				stepWindows[candidate.Task.ID] = daytime.Order(window)
-				stepReadyAt[candidate.Task.ID] = readyAt
+			processedSubtaskTasks[candidate.Task.ID] = true
+			group := collectSubtaskCandidates(candidates, candidate.Task.ID)
+			required, softFollowups := splitRequiredAndSoftFollowups(group)
+			requiredScheduled, ok := tryFitCandidateGroup(required, used, stepWindows, stepReadyAt, budgets, planDate, constraints)
+			if !ok {
+				groupOverflowed, groupSkipped := deferCandidateGroup(group)
+				overflowed = append(overflowed, groupOverflowed...)
+				skipped = append(skipped, groupSkipped...)
+				continue
 			}
-			scheduled = append(scheduled, candidate)
+			scheduled = append(scheduled, requiredScheduled...)
+			for _, followup := range softFollowups {
+				fitted, ok := tryFitCandidate(followup, used, stepWindows, stepReadyAt, budgets, planDate, constraints)
+				if ok {
+					scheduled = append(scheduled, fitted)
+					continue
+				}
+				followupOverflowed, followupSkipped := deferCandidateGroup([]scheduledCandidate{followup})
+				overflowed = append(overflowed, followupOverflowed...)
+				skipped = append(skipped, followupSkipped...)
+			}
 			continue
 		}
 
+		fitted, ok := tryFitCandidate(candidate, used, stepWindows, stepReadyAt, budgets, planDate, constraints)
+		if ok {
+			scheduled = append(scheduled, fitted)
+			continue
+		}
+		candidateOverflowed, candidateSkipped := deferCandidateGroup([]scheduledCandidate{candidate})
+		overflowed = append(overflowed, candidateOverflowed...)
+		skipped = append(skipped, candidateSkipped...)
+	}
+
+	return scheduled, overflowed, skipped
+}
+
+func collectSubtaskCandidates(candidates []scheduledCandidate, taskID string) []scheduledCandidate {
+	group := []scheduledCandidate{}
+	for _, candidate := range candidates {
+		if candidate.Subtask != nil && candidate.Task.ID == taskID {
+			group = append(group, candidate)
+		}
+	}
+	sort.SliceStable(group, func(i, j int) bool {
+		return group[i].Subtask.StepOrder < group[j].Subtask.StepOrder
+	})
+	return group
+}
+
+func splitRequiredAndSoftFollowups(group []scheduledCandidate) (required, softFollowups []scheduledCandidate) {
+	for _, candidate := range group {
+		if candidate.Subtask != nil && candidate.Subtask.DependencyType == tasks.SubtaskDependencySoftFollowup {
+			softFollowups = append(softFollowups, candidate)
+			continue
+		}
+		required = append(required, candidate)
+	}
+	if len(required) == 0 {
+		return group, nil
+	}
+	return required, softFollowups
+}
+
+func tryFitCandidateGroup(group []scheduledCandidate, used, stepWindows map[string]int, stepReadyAt map[string]time.Time, budgets map[string]int, planDate time.Time, constraints calendarConstraints) ([]scheduledCandidate, bool) {
+	simUsed := copyIntMap(used)
+	simStepWindows := copyIntMap(stepWindows)
+	simStepReadyAt := copyTimeMap(stepReadyAt)
+	scheduled := make([]scheduledCandidate, 0, len(group))
+	for _, candidate := range group {
+		fitted, ok := tryFitCandidate(candidate, simUsed, simStepWindows, simStepReadyAt, budgets, planDate, constraints)
+		if !ok {
+			return nil, false
+		}
+		scheduled = append(scheduled, fitted)
+	}
+	copyIntMapInto(used, simUsed)
+	copyIntMapInto(stepWindows, simStepWindows)
+	copyTimeMapInto(stepReadyAt, simStepReadyAt)
+	return scheduled, true
+}
+
+func tryFitCandidate(candidate scheduledCandidate, used, stepWindows map[string]int, stepReadyAt map[string]time.Time, budgets map[string]int, planDate time.Time, constraints calendarConstraints) (scheduledCandidate, bool) {
+	candidate = prepareCandidate(candidate, stepWindows, stepReadyAt, planDate)
+	window := string(candidate.Window)
+	if constraints.SmallTaskOnlyReason != "" && candidate.Duration > 15 {
+		return candidate, false
+	}
+	if used[window]+candidate.Duration > budgets[window] {
+		return candidate, false
+	}
+	used[window] += candidate.Duration
+	if candidate.Subtask != nil {
+		stepWindows[candidate.Task.ID] = daytime.Order(window)
+		if candidate.Occurrence.ReadyAt != nil {
+			stepReadyAt[candidate.Task.ID] = *candidate.Occurrence.ReadyAt
+		}
+	}
+	return candidate, true
+}
+
+func prepareCandidate(candidate scheduledCandidate, stepWindows map[string]int, stepReadyAt map[string]time.Time, planDate time.Time) scheduledCandidate {
+	window := string(candidate.Window)
+	if window == "" || window == string(tasks.TimeOfDayAny) {
+		window = "morning"
+	}
+	candidate.Window = tasks.TimeOfDayPreference(window)
+
+	readyAt := daytime.StartTime(planDate, window)
+	if candidate.Subtask != nil {
+		prevWindow, ok := stepWindows[candidate.Task.ID]
+		currentWindow := daytime.Order(window)
+		if candidate.Subtask.StepOrder > 1 && ok && currentWindow < prevWindow {
+			currentWindow = prevWindow
+			switch currentWindow {
+			case 0:
+				window = "morning"
+			case 1:
+				window = "afternoon"
+			default:
+				window = "evening"
+			}
+			candidate.Window = tasks.TimeOfDayPreference(window)
+			readyAt = daytime.StartTime(planDate, window)
+		}
+		if prevReady, ok := stepReadyAt[candidate.Task.ID]; ok {
+			minReady := prevReady.Add(time.Duration(candidate.Subtask.GapRule.MinGapAfterPreviousMinutes) * time.Minute)
+			if minReady.After(readyAt) {
+				readyAt = minReady
+			}
+			if shiftedWindow, ok := daytime.WindowForTime(planDate, readyAt); ok {
+				window = shiftedWindow
+				candidate.Window = tasks.TimeOfDayPreference(window)
+			} else {
+				window = "evening"
+				candidate.Window = tasks.TimeOfDayPreference(window)
+				readyAt = daytime.EndTime(planDate, window)
+			}
+		}
+	}
+	candidate.Occurrence.ReadyAt = &readyAt
+	return candidate
+}
+
+func deferCandidateGroup(group []scheduledCandidate) (overflowed, skipped []scheduledCandidate) {
+	for _, candidate := range group {
 		nextRollover := candidate.Occurrence.RolloverCount + 1
 		if candidate.Task.Priority != tasks.PriorityHigh && nextRollover >= rolloverCap {
 			skipped = append(skipped, candidate)
@@ -542,8 +797,35 @@ func fitCandidates(candidates []scheduledCandidate, budgets map[string]int, plan
 		}
 		overflowed = append(overflowed, candidate)
 	}
+	return overflowed, skipped
+}
 
-	return scheduled, overflowed, skipped
+func copyIntMap(source map[string]int) map[string]int {
+	result := map[string]int{}
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func copyIntMapInto(target, source map[string]int) {
+	for key, value := range source {
+		target[key] = value
+	}
+}
+
+func copyTimeMap(source map[string]time.Time) map[string]time.Time {
+	result := map[string]time.Time{}
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func copyTimeMapInto(target, source map[string]time.Time) {
+	for key, value := range source {
+		target[key] = value
+	}
 }
 
 func persistOccurrence(ctx context.Context, service *occurrences.Service, occurrence occurrences.Occurrence) (occurrences.Occurrence, error) {

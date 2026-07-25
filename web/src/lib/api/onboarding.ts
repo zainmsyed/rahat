@@ -1,4 +1,5 @@
 import { replaceState } from '$app/navigation';
+import { apiBaseUrl } from './config';
 
 export type CadenceType = 'interval' | 'count';
 export type Priority = 'high' | 'medium' | 'low';
@@ -11,11 +12,14 @@ export type OnboardingProfile = {
 	email: string;
 };
 
+export type SubtaskDependencyType = 'required_same_day' | 'soft_followup';
+
 export type OnboardingSubtask = {
 	id?: string;
 	name: string;
 	duration_minutes: number;
 	time_of_day_preference: TimeOfDayPreference;
+	dependency_type?: SubtaskDependencyType;
 	min_gap_after_previous_minutes: number;
 };
 
@@ -100,7 +104,7 @@ export type OnboardingStep = {
 	complete: boolean;
 };
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+export { apiBaseUrl } from './config';
 const storageKey = 'rahat-onboarding-token';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

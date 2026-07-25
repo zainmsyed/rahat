@@ -1,10 +1,10 @@
 # Story 009: Add the read-only today/tomorrow lookahead page
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** frontend  
 **Created:** 2026-07-07  
-**Last accessed:** 2026-07-24  
-**Completed:** —
+**Last accessed:** 2026-07-25  
+**Completed:** 2026-07-25
 
 ---
 

@@ -162,11 +162,12 @@ func createSubtask(ctx context.Context, exec dbExecutor, subtask Subtask) (Subta
 	if subtask.CreatedAt.IsZero() {
 		subtask.CreatedAt = time.Now().UTC()
 	}
+	subtask.DependencyType = normalizeSubtaskDependency(subtask.DependencyType)
 
 	if _, err := exec.ExecContext(ctx, `
-		INSERT INTO subtasks (id, task_id, step_order, name, duration_minutes, time_of_day_preference, min_gap_after_previous_minutes, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, subtask.ID, subtask.TaskID, subtask.StepOrder, subtask.Name, subtask.DurationMinutes, subtask.TimeOfDayPreference, subtask.GapRule.MinGapAfterPreviousMinutes, store.FormatTime(subtask.CreatedAt)); err != nil {
+		INSERT INTO subtasks (id, task_id, step_order, name, duration_minutes, time_of_day_preference, dependency_type, min_gap_after_previous_minutes, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, subtask.ID, subtask.TaskID, subtask.StepOrder, subtask.Name, subtask.DurationMinutes, subtask.TimeOfDayPreference, subtask.DependencyType, subtask.GapRule.MinGapAfterPreviousMinutes, store.FormatTime(subtask.CreatedAt)); err != nil {
 		return Subtask{}, fmt.Errorf("create subtask: %w", err)
 	}
 
@@ -177,10 +178,10 @@ func (r *Repository) GetSubtaskByID(ctx context.Context, id string) (Subtask, er
 	var subtask Subtask
 	var createdAt string
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT id, task_id, step_order, name, duration_minutes, time_of_day_preference, min_gap_after_previous_minutes, created_at
+		SELECT id, task_id, step_order, name, duration_minutes, time_of_day_preference, dependency_type, min_gap_after_previous_minutes, created_at
 		FROM subtasks
 		WHERE id = ?
-	`, id).Scan(&subtask.ID, &subtask.TaskID, &subtask.StepOrder, &subtask.Name, &subtask.DurationMinutes, &subtask.TimeOfDayPreference, &subtask.GapRule.MinGapAfterPreviousMinutes, &createdAt); err != nil {
+	`, id).Scan(&subtask.ID, &subtask.TaskID, &subtask.StepOrder, &subtask.Name, &subtask.DurationMinutes, &subtask.TimeOfDayPreference, &subtask.DependencyType, &subtask.GapRule.MinGapAfterPreviousMinutes, &createdAt); err != nil {
 		return Subtask{}, fmt.Errorf("get subtask %s: %w", id, err)
 	}
 	var err error
@@ -192,11 +193,12 @@ func (r *Repository) GetSubtaskByID(ctx context.Context, id string) (Subtask, er
 }
 
 func (r *Repository) UpdateSubtask(ctx context.Context, subtask Subtask) (Subtask, error) {
+	subtask.DependencyType = normalizeSubtaskDependency(subtask.DependencyType)
 	if _, err := r.db.ExecContext(ctx, `
 		UPDATE subtasks
-		SET step_order = ?, name = ?, duration_minutes = ?, time_of_day_preference = ?, min_gap_after_previous_minutes = ?
+		SET step_order = ?, name = ?, duration_minutes = ?, time_of_day_preference = ?, dependency_type = ?, min_gap_after_previous_minutes = ?
 		WHERE id = ?
-	`, subtask.StepOrder, subtask.Name, subtask.DurationMinutes, subtask.TimeOfDayPreference, subtask.GapRule.MinGapAfterPreviousMinutes, subtask.ID); err != nil {
+	`, subtask.StepOrder, subtask.Name, subtask.DurationMinutes, subtask.TimeOfDayPreference, subtask.DependencyType, subtask.GapRule.MinGapAfterPreviousMinutes, subtask.ID); err != nil {
 		return Subtask{}, fmt.Errorf("update subtask %s: %w", subtask.ID, err)
 	}
 	return r.GetSubtaskByID(ctx, subtask.ID)
@@ -218,7 +220,7 @@ func deleteSubtasksByTask(ctx context.Context, exec dbExecutor, taskID string) e
 
 func (r *Repository) ListSubtasksByTask(ctx context.Context, taskID string) ([]Subtask, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, task_id, step_order, name, duration_minutes, time_of_day_preference, min_gap_after_previous_minutes, created_at
+		SELECT id, task_id, step_order, name, duration_minutes, time_of_day_preference, dependency_type, min_gap_after_previous_minutes, created_at
 		FROM subtasks
 		WHERE task_id = ?
 		ORDER BY step_order, id
@@ -232,7 +234,7 @@ func (r *Repository) ListSubtasksByTask(ctx context.Context, taskID string) ([]S
 	for rows.Next() {
 		var subtask Subtask
 		var createdAt string
-		if err := rows.Scan(&subtask.ID, &subtask.TaskID, &subtask.StepOrder, &subtask.Name, &subtask.DurationMinutes, &subtask.TimeOfDayPreference, &subtask.GapRule.MinGapAfterPreviousMinutes, &createdAt); err != nil {
+		if err := rows.Scan(&subtask.ID, &subtask.TaskID, &subtask.StepOrder, &subtask.Name, &subtask.DurationMinutes, &subtask.TimeOfDayPreference, &subtask.DependencyType, &subtask.GapRule.MinGapAfterPreviousMinutes, &createdAt); err != nil {
 			return nil, fmt.Errorf("scan subtask row: %w", err)
 		}
 		if subtask.CreatedAt, err = store.ParseTime(createdAt); err != nil {
@@ -242,6 +244,13 @@ func (r *Repository) ListSubtasksByTask(ctx context.Context, taskID string) ([]S
 	}
 
 	return subtasks, rows.Err()
+}
+
+func normalizeSubtaskDependency(value SubtaskDependencyType) SubtaskDependencyType {
+	if value == SubtaskDependencySoftFollowup {
+		return SubtaskDependencySoftFollowup
+	}
+	return SubtaskDependencyRequiredSameDay
 }
 
 func (r *Repository) ListStarterTaskTemplates(ctx context.Context) ([]StarterTaskTemplate, error) {
@@ -268,7 +277,7 @@ func (r *Repository) ListStarterTaskTemplates(ctx context.Context) ([]StarterTas
 	}
 
 	subtaskRows, err := r.db.QueryContext(ctx, `
-		SELECT id, starter_task_template_id, step_order, name, duration_minutes, time_of_day_preference, min_gap_after_previous_minutes
+		SELECT id, starter_task_template_id, step_order, name, duration_minutes, time_of_day_preference, dependency_type, min_gap_after_previous_minutes
 		FROM starter_subtask_templates
 		ORDER BY starter_task_template_id, step_order
 	`)
@@ -280,7 +289,7 @@ func (r *Repository) ListStarterTaskTemplates(ctx context.Context) ([]StarterTas
 	subtasksByTemplate := map[string][]StarterSubtaskTemplate{}
 	for subtaskRows.Next() {
 		var subtask StarterSubtaskTemplate
-		if err := subtaskRows.Scan(&subtask.ID, &subtask.StarterTaskTemplateID, &subtask.StepOrder, &subtask.Name, &subtask.DurationMinutes, &subtask.TimeOfDayPreference, &subtask.MinGapAfterPreviousMinutes); err != nil {
+		if err := subtaskRows.Scan(&subtask.ID, &subtask.StarterTaskTemplateID, &subtask.StepOrder, &subtask.Name, &subtask.DurationMinutes, &subtask.TimeOfDayPreference, &subtask.DependencyType, &subtask.MinGapAfterPreviousMinutes); err != nil {
 			return nil, fmt.Errorf("scan starter subtask template: %w", err)
 		}
 		subtasksByTemplate[subtask.StarterTaskTemplateID] = append(subtasksByTemplate[subtask.StarterTaskTemplateID], subtask)

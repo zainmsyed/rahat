@@ -148,6 +148,17 @@ func TestCreateTaskFromStarterTemplate(t *testing.T) {
 	if created.Task.UserID != user.ID {
 		t.Fatal("task user id mismatch")
 	}
+	if templates[0].Slug == "laundry" {
+		if len(created.Subtasks) != 3 {
+			t.Fatalf("laundry subtasks = %d, want 3", len(created.Subtasks))
+		}
+		if created.Subtasks[0].DependencyType != tasks.SubtaskDependencyRequiredSameDay || created.Subtasks[1].DependencyType != tasks.SubtaskDependencyRequiredSameDay {
+			t.Fatalf("wash/dry dependency types = %q/%q, want required", created.Subtasks[0].DependencyType, created.Subtasks[1].DependencyType)
+		}
+		if created.Subtasks[2].DependencyType != tasks.SubtaskDependencySoftFollowup {
+			t.Fatalf("fold dependency type = %q, want soft_followup", created.Subtasks[2].DependencyType)
+		}
+	}
 }
 
 func TestCreateTaskFromStarterTemplateNotFound(t *testing.T) {

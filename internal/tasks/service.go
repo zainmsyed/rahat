@@ -159,7 +159,7 @@ func (s *Service) CreateTaskFromStarterTemplate(ctx context.Context, userID, tem
 		}
 		subtasks := make([]Subtask, 0, len(tmpl.Subtasks))
 		for _, starter := range tmpl.Subtasks {
-			subtasks = append(subtasks, Subtask{StepOrder: starter.StepOrder, Name: starter.Name, DurationMinutes: starter.DurationMinutes, TimeOfDayPreference: starter.TimeOfDayPreference, GapRule: SubtaskGapRule{MinGapAfterPreviousMinutes: starter.MinGapAfterPreviousMinutes}})
+			subtasks = append(subtasks, Subtask{StepOrder: starter.StepOrder, Name: starter.Name, DurationMinutes: starter.DurationMinutes, TimeOfDayPreference: starter.TimeOfDayPreference, DependencyType: starter.DependencyType, GapRule: SubtaskGapRule{MinGapAfterPreviousMinutes: starter.MinGapAfterPreviousMinutes}})
 		}
 		return s.CreateTaskWithSubtasks(ctx, task, subtasks)
 	}

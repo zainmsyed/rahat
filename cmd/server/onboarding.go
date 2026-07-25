@@ -76,10 +76,11 @@ type onboardingTaskRequest struct {
 }
 
 type onboardingSubtaskRequest struct {
-	Name                       string                      `json:"name"`
-	DurationMinutes            int                         `json:"duration_minutes"`
-	TimeOfDayPreference        taskpkg.TimeOfDayPreference `json:"time_of_day_preference"`
-	MinGapAfterPreviousMinutes int                         `json:"min_gap_after_previous_minutes"`
+	Name                       string                        `json:"name"`
+	DurationMinutes            int                           `json:"duration_minutes"`
+	TimeOfDayPreference        taskpkg.TimeOfDayPreference   `json:"time_of_day_preference"`
+	DependencyType             taskpkg.SubtaskDependencyType `json:"dependency_type,omitempty"`
+	MinGapAfterPreviousMinutes int                           `json:"min_gap_after_previous_minutes"`
 }
 
 type onboardingCreateSessionRequest struct {
@@ -134,11 +135,12 @@ type onboardingTaskResponse struct {
 }
 
 type onboardingSubtaskResponse struct {
-	ID                         string                      `json:"id"`
-	Name                       string                      `json:"name"`
-	DurationMinutes            int                         `json:"duration_minutes"`
-	TimeOfDayPreference        taskpkg.TimeOfDayPreference `json:"time_of_day_preference"`
-	MinGapAfterPreviousMinutes int                         `json:"min_gap_after_previous_minutes"`
+	ID                         string                        `json:"id"`
+	Name                       string                        `json:"name"`
+	DurationMinutes            int                           `json:"duration_minutes"`
+	TimeOfDayPreference        taskpkg.TimeOfDayPreference   `json:"time_of_day_preference"`
+	DependencyType             taskpkg.SubtaskDependencyType `json:"dependency_type"`
+	MinGapAfterPreviousMinutes int                           `json:"min_gap_after_previous_minutes"`
 }
 
 type starterTemplateResponse struct {
@@ -156,10 +158,11 @@ type starterTemplateResponse struct {
 }
 
 type starterSubtaskResponse struct {
-	Name                       string                      `json:"name"`
-	DurationMinutes            int                         `json:"duration_minutes"`
-	TimeOfDayPreference        taskpkg.TimeOfDayPreference `json:"time_of_day_preference"`
-	MinGapAfterPreviousMinutes int                         `json:"min_gap_after_previous_minutes"`
+	Name                       string                        `json:"name"`
+	DurationMinutes            int                           `json:"duration_minutes"`
+	TimeOfDayPreference        taskpkg.TimeOfDayPreference   `json:"time_of_day_preference"`
+	DependencyType             taskpkg.SubtaskDependencyType `json:"dependency_type"`
+	MinGapAfterPreviousMinutes int                           `json:"min_gap_after_previous_minutes"`
 }
 
 type onboardingCreateStarterTaskRequest struct {
@@ -862,7 +865,14 @@ func validateTaskRequest(userID string, req onboardingTaskRequest) (taskpkg.Task
 				return taskpkg.Task{}, nil, fmt.Errorf("step %d has an unrecognized time of day", i+1)
 			}
 			totalDuration += raw.DurationMinutes
-			subtasks = append(subtasks, taskpkg.Subtask{StepOrder: i + 1, Name: stepName, DurationMinutes: raw.DurationMinutes, TimeOfDayPreference: raw.TimeOfDayPreference, GapRule: taskpkg.SubtaskGapRule{MinGapAfterPreviousMinutes: raw.MinGapAfterPreviousMinutes}})
+			dependencyType := raw.DependencyType
+			if dependencyType == "" {
+				dependencyType = taskpkg.SubtaskDependencyRequiredSameDay
+			}
+			if dependencyType != taskpkg.SubtaskDependencyRequiredSameDay && dependencyType != taskpkg.SubtaskDependencySoftFollowup {
+				return taskpkg.Task{}, nil, fmt.Errorf("step %d has an unrecognized dependency type", i+1)
+			}
+			subtasks = append(subtasks, taskpkg.Subtask{StepOrder: i + 1, Name: stepName, DurationMinutes: raw.DurationMinutes, TimeOfDayPreference: raw.TimeOfDayPreference, DependencyType: dependencyType, GapRule: taskpkg.SubtaskGapRule{MinGapAfterPreviousMinutes: raw.MinGapAfterPreviousMinutes}})
 		}
 	} else if req.DurationMinutes < 1 || req.DurationMinutes > 240 {
 		return taskpkg.Task{}, nil, errors.New("task duration must be between 1 and 240 minutes")
@@ -966,7 +976,7 @@ func toTaskResponses(taskDefs []taskpkg.TaskWithSubtasks) []onboardingTaskRespon
 func toTaskResponse(taskDef taskpkg.TaskWithSubtasks) onboardingTaskResponse {
 	subtasks := make([]onboardingSubtaskResponse, 0, len(taskDef.Subtasks))
 	for _, subtask := range taskDef.Subtasks {
-		subtasks = append(subtasks, onboardingSubtaskResponse{ID: subtask.ID, Name: subtask.Name, DurationMinutes: subtask.DurationMinutes, TimeOfDayPreference: subtask.TimeOfDayPreference, MinGapAfterPreviousMinutes: subtask.GapRule.MinGapAfterPreviousMinutes})
+		subtasks = append(subtasks, onboardingSubtaskResponse{ID: subtask.ID, Name: subtask.Name, DurationMinutes: subtask.DurationMinutes, TimeOfDayPreference: subtask.TimeOfDayPreference, DependencyType: subtask.DependencyType, MinGapAfterPreviousMinutes: subtask.GapRule.MinGapAfterPreviousMinutes})
 	}
 	return onboardingTaskResponse{ID: taskDef.Task.ID, Name: taskDef.Task.Name, Description: taskDef.Task.Description, DurationMinutes: taskDef.Task.DurationMinutes, CadenceType: taskDef.Task.CadenceType, CadenceValue: taskDef.Task.CadenceValue, Priority: taskDef.Task.Priority, TimeOfDayPreference: taskDef.Task.TimeOfDayPreference, IsMultistep: taskDef.Task.IsMultistep, Subtasks: subtasks}
 }
@@ -976,7 +986,7 @@ func toStarterTemplateResponses(templates []taskpkg.StarterTaskTemplate) []start
 	for _, tmpl := range templates {
 		subtasks := make([]starterSubtaskResponse, 0, len(tmpl.Subtasks))
 		for _, subtask := range tmpl.Subtasks {
-			subtasks = append(subtasks, starterSubtaskResponse{Name: subtask.Name, DurationMinutes: subtask.DurationMinutes, TimeOfDayPreference: subtask.TimeOfDayPreference, MinGapAfterPreviousMinutes: subtask.MinGapAfterPreviousMinutes})
+			subtasks = append(subtasks, starterSubtaskResponse{Name: subtask.Name, DurationMinutes: subtask.DurationMinutes, TimeOfDayPreference: subtask.TimeOfDayPreference, DependencyType: subtask.DependencyType, MinGapAfterPreviousMinutes: subtask.MinGapAfterPreviousMinutes})
 		}
 		result = append(result, starterTemplateResponse{ID: tmpl.ID, Slug: tmpl.Slug, Name: tmpl.Name, Description: tmpl.Description, DurationMinutes: tmpl.DurationMinutes, CadenceType: tmpl.CadenceType, CadenceValue: tmpl.CadenceValue, Priority: tmpl.Priority, TimeOfDayPreference: tmpl.TimeOfDayPreference, IsMultistep: tmpl.IsMultistep, Subtasks: subtasks})
 	}

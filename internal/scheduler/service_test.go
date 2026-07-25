@@ -85,6 +85,41 @@ func TestPlanDayScenarios(t *testing.T) {
 			},
 		},
 		{
+			name:                     "multistep chain defers all steps when the first required step cannot fit",
+			day:                      time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC),
+			seed:                     seedMultistepPartialBudget,
+			wantScheduled:            0,
+			wantOverflowed:           2,
+			wantSkipped:              0,
+			wantCheckpoint:           false,
+			wantCheckpointWindowHour: 0,
+			assert: func(t *testing.T, result scheduler.PlanResult) {
+				for _, occurrence := range result.Scheduled {
+					if occurrence.SubtaskID != "" {
+						t.Fatalf("no subtask should be scheduled when the chain cannot fit, got %+v", result.Scheduled)
+					}
+				}
+			},
+		},
+		{
+			name:                     "multistep soft follow-up defers without blocking required chain",
+			day:                      time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC),
+			seed:                     seedMultistepSoftFollowupBudget,
+			wantScheduled:            2,
+			wantOverflowed:           1,
+			wantSkipped:              0,
+			wantCheckpoint:           true,
+			wantCheckpointWindowHour: 8,
+			assert: func(t *testing.T, result scheduler.PlanResult) {
+				if len(result.Scheduled) != 2 || len(result.Overflowed) != 1 {
+					t.Fatalf("expected 2 scheduled required steps and 1 deferred follow-up, got scheduled=%+v overflowed=%+v", result.Scheduled, result.Overflowed)
+				}
+				if result.Overflowed[0].SubtaskID == "" {
+					t.Fatalf("expected soft follow-up subtask to overflow, got %+v", result.Overflowed[0])
+				}
+			},
+		},
+		{
 			name:                     "weekly count treats multistep completion as one parent task unit",
 			day:                      time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC),
 			seed:                     seedWeeklyCountMultistep,
@@ -287,6 +322,41 @@ func seedLaundryDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *u
 	return user.ID
 }
 
+func seedMultistepPartialBudget(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service, _ *store.CalendarBlockRepository) string {
+	t.Helper()
+	user, err := userService.Create(ctx, users.User{DisplayName: "Partial Laundry", Timezone: "UTC", DailyTimeBudgetMinutes: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Laundry", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAny, IsMultistep: true}, []tasks.Subtask{
+		{Name: "Wash", StepOrder: 1, DurationMinutes: 9, TimeOfDayPreference: tasks.TimeOfDayMorning},
+		{Name: "Move to dryer", StepOrder: 2, DurationMinutes: 1, TimeOfDayPreference: tasks.TimeOfDayAfternoon, GapRule: tasks.SubtaskGapRule{MinGapAfterPreviousMinutes: 45}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return user.ID
+}
+
+func seedMultistepSoftFollowupBudget(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, _ *occurrences.Service, _ *store.CalendarBlockRepository) string {
+	t.Helper()
+	user, err := userService.Create(ctx, users.User{DisplayName: "Soft Laundry", Timezone: "UTC", DailyTimeBudgetMinutes: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Laundry", DurationMinutes: 25, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning, IsMultistep: true}, []tasks.Subtask{
+		{Name: "Wash", StepOrder: 1, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayMorning, DependencyType: tasks.SubtaskDependencyRequiredSameDay},
+		{Name: "Move to dryer", StepOrder: 2, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayMorning, DependencyType: tasks.SubtaskDependencyRequiredSameDay, GapRule: tasks.SubtaskGapRule{MinGapAfterPreviousMinutes: 45}},
+		{Name: "Fold", StepOrder: 3, DurationMinutes: 15, TimeOfDayPreference: tasks.TimeOfDayMorning, DependencyType: tasks.SubtaskDependencySoftFollowup, GapRule: tasks.SubtaskGapRule{MinGapAfterPreviousMinutes: 45}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return user.ID
+}
+
 func seedWeeklyCountMultistep(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, _ *store.CalendarBlockRepository) string {
 	t.Helper()
 	user, err := userService.Create(ctx, users.User{DisplayName: "Weekly Count", Timezone: "UTC", DailyTimeBudgetMinutes: 45})
@@ -392,6 +462,47 @@ func seedSingleWindowLargeCalendarBlock(ctx context.Context, t *testing.T, _ *sq
 		t.Fatal(err)
 	}
 	return user.ID
+}
+
+func TestPreviewRangeCarriesOverflowStateIntoTomorrow(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+
+	userService := users.NewService(users.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+	occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+
+	user, err := userService.Create(ctx, users.User{DisplayName: "Preview Range", Timezone: "UTC", DailyTimeBudgetMinutes: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Large task", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityHigh, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := schedulerService.PreviewRange(ctx, user.ID, time.Date(2026, 7, 22, 0, 0, 0, 0, time.UTC), 2)
+	if err != nil {
+		t.Fatalf("PreviewRange() error = %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d, want 2", len(results))
+	}
+	if len(results[0].Overflowed) != 1 || len(results[1].Overflowed) != 1 {
+		t.Fatalf("unexpected overflow counts: day1=%d day2=%d", len(results[0].Overflowed), len(results[1].Overflowed))
+	}
+	if results[1].Overflowed[0].OriginalScheduledForDate != "2026-07-22" {
+		t.Fatalf("tomorrow original date = %s, want 2026-07-22", results[1].Overflowed[0].OriginalScheduledForDate)
+	}
+	if results[1].Overflowed[0].RolloverCount != 2 {
+		t.Fatalf("tomorrow rollover_count = %d, want 2", results[1].Overflowed[0].RolloverCount)
+	}
 }
 
 func openTestDB(t *testing.T) *sql.DB {

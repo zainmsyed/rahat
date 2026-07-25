@@ -28,6 +28,7 @@ import (
 	"github.com/rahat/rahat/internal/scheduler"
 	"github.com/rahat/rahat/internal/store"
 	taskpkg "github.com/rahat/rahat/internal/tasks"
+	"github.com/rahat/rahat/internal/tokens"
 	usr "github.com/rahat/rahat/internal/users"
 	webhooktg "github.com/rahat/rahat/internal/webhooks/telegram"
 )
@@ -65,6 +66,11 @@ func main() {
 	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
 	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+	lookaheadSecret := os.Getenv("LOOKAHEAD_TOKEN_SECRET")
+	if lookaheadSecret == "" && cfg.AppEnv != "production" {
+		lookaheadSecret = "development-lookahead-secret"
+	}
+	lookaheadTokens := tokens.NewManager(lookaheadSecret)
 	googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
 
@@ -89,6 +95,7 @@ func main() {
 		googleAvailable:   googleAvailable,
 	}
 	onboardingService.register(mux)
+	(&lookaheadHandler{tokens: lookaheadTokens, users: userService, tasks: taskService, scheduler: schedulerService, allowTokenIssue: os.Getenv("LOOKAHEAD_TOKEN_ISSUER_ENABLED") == "true"}).register(mux)
 
 	if botToken != "" {
 		bot := ntg.NewHTTPBotClient(botToken, botBaseURL)

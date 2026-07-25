@@ -26,6 +26,13 @@ const (
 	TimeOfDayEvening   TimeOfDayPreference = "evening"
 )
 
+type SubtaskDependencyType string
+
+const (
+	SubtaskDependencyRequiredSameDay SubtaskDependencyType = "required_same_day"
+	SubtaskDependencySoftFollowup    SubtaskDependencyType = "soft_followup"
+)
+
 type SubtaskGapRule struct {
 	MinGapAfterPreviousMinutes int
 }
@@ -53,6 +60,7 @@ type Subtask struct {
 	Name                string
 	DurationMinutes     int
 	TimeOfDayPreference TimeOfDayPreference
+	DependencyType      SubtaskDependencyType
 	GapRule             SubtaskGapRule
 	CreatedAt           time.Time
 }
@@ -84,5 +92,6 @@ type StarterSubtaskTemplate struct {
 	Name                       string
 	DurationMinutes            int
 	TimeOfDayPreference        TimeOfDayPreference
+	DependencyType             SubtaskDependencyType
 	MinGapAfterPreviousMinutes int
 }
