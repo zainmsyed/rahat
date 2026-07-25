@@ -1,10 +1,10 @@
 # Story 014: Enable self-service web access through Telegram
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** auth/integration  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
-**Completed:** —
+**Completed:** 2026-07-25
 
 ---
 
