@@ -1,6 +1,6 @@
 # Story 012: Establish durable beta web sessions
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** auth  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
@@ -43,15 +43,15 @@ A tester can finish onboarding and remain signed in on that browser, sign out, a
 ---
 
 ## Checklist
-- [ ] Add migrations and repositories for hashed single-use access grants and revocable web sessions with expirations
-- [ ] Establish an authenticated session when onboarding finishes without treating the onboarding token as the permanent credential
-- [ ] Add an operator CLI/script that issues a short-lived, single-use beta access link for an existing tester
-- [ ] Add access-link exchange, current-session, and logout endpoints using secure HttpOnly cookies
-- [ ] Add shared middleware/helpers that resolve the authenticated user and reject raw `user_id` authorization on protected routes
-- [ ] Apply secure cookie, SameSite, origin/CSRF, expiration, and revocation behavior appropriate to local and production environments
-- [ ] Add a minimal login/access-link page and authenticated-route handling in the SvelteKit app
-- [ ] Add tests for onboarding session promotion, one-time exchange, expiry, revocation/logout, cookie flags, missing sessions, and cross-user access attempts
-- [ ] Document beta access issuance, session secrets, production cookie requirements, and recovery procedure
+- [x] Add migrations and repositories for hashed single-use access grants and revocable web sessions with expirations
+- [x] Establish an authenticated session when onboarding finishes without treating the onboarding token as the permanent credential
+- [x] Add an operator CLI/script that issues a short-lived, single-use beta access link for an existing tester
+- [x] Add access-link exchange, current-session, and logout endpoints using secure HttpOnly cookies
+- [x] Add shared middleware/helpers that resolve the authenticated user and reject raw `user_id` authorization on protected routes
+- [x] Apply secure cookie, SameSite, origin/CSRF, expiration, and revocation behavior appropriate to local and production environments
+- [x] Add a minimal login/access-link page and authenticated-route handling in the SvelteKit app
+- [x] Add tests for onboarding session promotion, one-time exchange, expiry, revocation/logout, cookie flags, missing sessions, and cross-user access attempts
+- [x] Document beta access issuance, session secrets, production cookie requirements, and recovery procedure
 
 ---
 
@@ -60,3 +60,11 @@ A tester can finish onboarding and remain signed in on that browser, sign out, a
 ---
 
 ## Completion Summary
+
+Story 012 added a durable beta-session layer without introducing passwords or email delivery. Backend persistence now includes hashed single-use `beta_access_grants` and revocable `web_sessions` with expirations. The new `internal/auth` service issues access links, exchanges them exactly once into durable opaque browser sessions, verifies session cookies, and revokes sessions on logout.
+
+Onboarding completion now promotes the user into a real web session by setting a secure HttpOnly `rahat_session` cookie instead of treating the onboarding token as a permanent credential. A new auth handler exposes access-link exchange, current-session, and logout endpoints, applies trusted-origin checks on state-changing cookie flows, and provides shared authenticated-user helpers for protected routes. Existing protected integration points such as schedule planning and Google Calendar auth/sync now resolve ownership from the authenticated session rather than accepting a raw `user_id` query parameter.
+
+On the web side, SvelteKit now has a minimal `/login` page for access-link exchange and sign-out, a server hook that enforces authenticated routing for protected pages, and onboarding finish now stores the session cookie and clears the temporary onboarding token path. Operator recovery uses `scripts/issue-beta-access.sh <user-id-or-email>` / `go run ./cmd/server ops:issue-access-link ...` to produce single-use beta access links for existing testers.
+
+Verification completed with `go test ./...`, `cd web && npm run check`, and `cd web && npm test`. Documentation was updated in `README.md` and `deploy/README.md` to cover `WEB_SESSION_SECRET`, beta access issuance, cookie/origin requirements, and tester recovery flow.
