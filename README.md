@@ -36,6 +36,10 @@ Key variables:
 - `TELEGRAM_BOT_USERNAME`: Telegram bot username (optional; fetched from Telegram if omitted)
 - `TELEGRAM_WEBHOOK_SECRET` / `TELEGRAM_WEBHOOK_URL`: optional webhook mode for Telegram updates
 - `TELEGRAM_API_BASE_URL`: optional custom Telegram API base URL
+- `LOOKAHEAD_TOKEN_SECRET`: required in production for signed read-only lookahead links
+- `LOOKAHEAD_TOKEN_ISSUER_ENABLED`: explicit opt-in for the non-production lookahead token helper
+- `EMAIL_RECAP_OUTBOX_DIR`: file outbox path used by the recap job
+- `BACKUP_TARGET_URI`: backup destination, either a local path / `file://` path or an `s3://` URI
 
 ## Local development
 
@@ -73,7 +77,34 @@ make web
 
 The web app starts on `http://localhost:5173` by default.
 
-### 4. Run the local verification target
+### 4. Ops commands and scripts
+
+Story 011 adds operator-facing commands plus thin shell wrappers under `scripts/`.
+
+Examples:
+
+```bash
+# Run one job immediately
+bash scripts/run-daily-schedule.sh
+bash scripts/run-telegram-daily.sh
+bash scripts/run-telegram-window.sh
+bash scripts/run-calendar-sync.sh
+bash scripts/run-email-recap.sh
+bash scripts/run-backup.sh
+
+# Report event activity (JSON by default, or REPORT_FORMAT=csv)
+bash scripts/report-events.sh
+
+# Seed demo testers into a non-production database
+bash scripts/bootstrap-testers.sh
+
+# Reset a non-production database (guarded)
+RAHAT_RESET_CONFIRM=reset-non-production bash scripts/reset-nonprod.sh
+```
+
+All scripts source `.env` automatically when it exists and call the matching `go run ./cmd/server ops:...` command.
+
+### 5. Run the local verification target
 
 ```bash
 make ci
@@ -109,6 +140,13 @@ Then open:
 - `web/src/routes/+page.svelte`: starter placeholder page
 
 ## Deployment baseline
+
+Story 011 adds deploy/runbook notes under:
+
+- `deploy/README.md`
+- `deploy/launch-smoke-checklist.md`
+
+Use these docs for Coolify/Hetzner secret management, cron wiring, backups, Telegram webhook setup, Google OAuth setup, and launch smoke checks.
 
 The included `Dockerfile` packages the Go API into a single container image suitable for an initial Coolify or Hetzner deployment. It expects a writable `/data` volume for SQLite and honors `PORT` or `RAHAT_HTTP_ADDR` at runtime.
 

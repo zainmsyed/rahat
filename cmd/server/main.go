@@ -67,7 +67,7 @@ func main() {
 	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
 	lookaheadSecret := os.Getenv("LOOKAHEAD_TOKEN_SECRET")
-	if lookaheadSecret == "" && cfg.AppEnv != "production" {
+	if lookaheadSecret == "" && cfg.AppEnv == "development" {
 		lookaheadSecret = "development-lookahead-secret"
 	}
 	lookaheadTokens := tokens.NewManager(lookaheadSecret)
@@ -81,6 +81,7 @@ func main() {
 	botUsername := os.Getenv("TELEGRAM_BOT_USERNAME")
 	telegramAvailable := botToken != ""
 	googleAvailable := os.Getenv("GOOGLE_CLIENT_ID") != "" && os.Getenv("GOOGLE_CLIENT_SECRET") != "" && os.Getenv("GOOGLE_REDIRECT_URL") != ""
+	var telegramService *ntg.Service
 
 	onboardingService := &onboardingHandler{
 		sessions:          newOnboardingSessionStore(os.Getenv("ONBOARDING_INVITE_CODE")),
@@ -107,7 +108,7 @@ func main() {
 				logger.Warn("telegram getMe failed", "error", err)
 			}
 		}
-		telegramService := ntg.NewService(bot, userService, taskService, occurrenceService, eventService)
+		telegramService = ntg.NewService(bot, userService, taskService, occurrenceService, eventService)
 		checkinService := checkins.NewService(bot, userService, taskService, occurrenceService, eventService, prefService)
 		transport := configureTelegramTransport(ctx, logger, mux, bot, webhookSecret, webhookURL, checkinService, onboardingService)
 		logger.Info("telegram bot enabled", "transport", transport)
@@ -141,6 +142,63 @@ func main() {
 		})
 	} else {
 		logger.Warn("telegram bot disabled: TELEGRAM_BOT_TOKEN not set")
+	}
+
+	ops := newOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath, userService, taskService, prefService, schedulerService, telegramService, calendarService, eventService, lookaheadTokens)
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "ops:run-job":
+			if len(os.Args) < 3 {
+				logger.Error("missing job name", "available_jobs", ops.jobs.Names())
+				os.Exit(1)
+			}
+			if err := ops.jobs.Run(ctx, os.Args[2]); err != nil {
+				logger.Error("job failed", "job", os.Args[2], "error", err)
+				os.Exit(1)
+			}
+			logger.Info("job complete", "job", os.Args[2])
+			return
+		case "ops:report-events":
+			filter, err := parseReportFilter()
+			if err != nil {
+				logger.Error("invalid report filter", "error", err)
+				os.Exit(1)
+			}
+			format := strings.ToLower(strings.TrimSpace(os.Getenv("REPORT_FORMAT")))
+			if format == "csv" {
+				if err := ops.exportEventsCSV(ctx, filter, os.Stdout); err != nil {
+					logger.Error("event export failed", "error", err)
+					os.Exit(1)
+				}
+				return
+			}
+			if err := ops.reportEventSummary(ctx, filter, os.Stdout); err != nil {
+				logger.Error("event summary failed", "error", err)
+				os.Exit(1)
+			}
+			return
+		case "ops:backup":
+			if err := ops.runBackup(ctx); err != nil {
+				logger.Error("backup failed", "error", err)
+				os.Exit(1)
+			}
+			logger.Info("backup complete", "target", ops.backupTarget)
+			return
+		case "ops:seed-testers":
+			if err := ops.seedTesters(ctx); err != nil {
+				logger.Error("seed testers failed", "error", err)
+				os.Exit(1)
+			}
+			logger.Info("seed testers complete")
+			return
+		case "ops:reset-nonprod":
+			if err := ops.resetNonProduction(ctx, os.Getenv("RAHAT_RESET_CONFIRM")); err != nil {
+				logger.Error("reset failed", "error", err)
+				os.Exit(1)
+			}
+			logger.Info("non-production reset complete", "database_path", cfg.DatabasePath)
+			return
+		}
 	}
 
 	mux.HandleFunc("GET /calendar/google/auth-url", func(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,56 @@
+# Deploying Rahat for the tester group
+
+This deploy guide assumes a single-app backend on Coolify or a small Hetzner VM.
+
+## Required secrets
+
+- `APP_ENV=production`
+- `DATABASE_PATH=/data/rahat.sqlite3`
+- `WEB_ORIGIN=https://<your-web-origin>`
+- `LOOKAHEAD_TOKEN_SECRET=<32+ random chars>`
+- `BACKUP_TARGET_URI=<file:///backups or s3://bucket/path>`
+- `TELEGRAM_BOT_TOKEN=<telegram bot token>`
+- `TELEGRAM_WEBHOOK_SECRET=<random webhook secret>`
+- `TELEGRAM_WEBHOOK_URL=https://<domain>/webhooks/telegram` (only for webhook mode)
+- `GOOGLE_CLIENT_ID=<google oauth client id>`
+- `GOOGLE_CLIENT_SECRET=<google oauth secret>`
+- `GOOGLE_REDIRECT_URL=https://<web-origin>/onboarding/calendar/callback`
+- `GOOGLE_CALENDAR_ID=primary` (optional)
+
+## Optional ops toggles
+
+- `LOOKAHEAD_TOKEN_ISSUER_ENABLED=true` — only for controlled non-production token generation
+- `EMAIL_RECAP_OUTBOX_DIR=/data/email-outbox` — file outbox path for recap artifacts
+- `RAHAT_RESET_CONFIRM=reset-non-production` — only for explicit reset runs in non-production
+
+## Coolify
+
+1. Build from the repo root using the existing backend Dockerfile.
+2. Mount persistent storage at `/data`.
+3. Set the environment variables above.
+4. Add scheduled commands in Coolify for:
+   - `bash scripts/run-daily-schedule.sh`
+   - `bash scripts/run-telegram-daily.sh`
+   - `bash scripts/run-telegram-window.sh`
+   - `bash scripts/run-calendar-sync.sh`
+   - `bash scripts/run-email-recap.sh`
+   - `bash scripts/run-backup.sh`
+5. If Telegram webhook mode is configured, confirm the app serves `/webhooks/telegram` on the same domain in `TELEGRAM_WEBHOOK_URL`.
+
+## Hetzner VM
+
+1. Copy the repo to the VM and keep `.env` outside shell history.
+2. Create a writable `/data` volume/directory.
+3. Run the server with the production env loaded.
+4. Install cron entries pointing at the scripts in `scripts/`.
+5. If `BACKUP_TARGET_URI` is an `s3://` path, install and configure the AWS CLI for the runtime user.
+
+## Telegram notes
+
+- Use long polling when there is no stable public domain.
+- Use webhook mode only when `TELEGRAM_WEBHOOK_URL` is a real HTTPS domain path ending in `/webhooks/telegram`.
+
+## Google notes
+
+- The OAuth redirect URL must match the actual onboarding callback route.
+- Calendar sync jobs only process users who already have a Google calendar connection saved.

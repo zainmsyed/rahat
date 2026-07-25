@@ -17,3 +17,11 @@ func (s *Service) Create(ctx context.Context, event EventLog) (EventLog, error) 
 func (s *Service) ListByUser(ctx context.Context, userID string) ([]EventLog, error) {
 	return s.repo.ListByUser(ctx, userID)
 }
+
+func (s *Service) Summary(ctx context.Context, filter ReportFilter) ([]SummaryRow, error) {
+	return s.repo.Summary(ctx, filter)
+}
+
+func (s *Service) ListFiltered(ctx context.Context, filter ReportFilter) ([]EventLog, error) {
+	return s.repo.ListFiltered(ctx, filter)
+}

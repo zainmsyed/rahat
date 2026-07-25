@@ -1,10 +1,10 @@
 # Story 011: Add ops, telemetry, backups, and launch tooling
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** ops  
 **Created:** 2026-07-07  
 **Last accessed:** 2026-07-25  
-**Completed:** —
+**Completed:** 2026-07-25
 
 ---
 
