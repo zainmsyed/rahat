@@ -1,0 +1,17 @@
+{
+  "note": "Two reusable rules emerged from the CORS refinement and the local-IP fallback work needed to make Telegram inline-button links work in development.",
+  "candidates": [
+    {
+      "text": "When an HTTP response selects Access-Control-Allow-Origin based on the request Origin, always include a Vary: Origin header.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "The review found that withCORS returned a dynamic origin without Vary, which can cause shared caches to serve the wrong CORS header to other clients. This is a general HTTP correctness issue, not story-specific."
+    },
+    {
+      "text": "Do not rely solely on OS network-interface enumeration to build URLs that end users will open; always provide an explicit configuration override and use enumeration only as a fallback.",
+      "confidence": "high",
+      "sources": ["story issue", "review finding"],
+      "rationale": "During story-014 verification Telegram rejected localhost inline-button URLs, so the code fell back to PrimaryLocalIPv4. That first-match heuristic can pick VPN/docker interfaces that phones cannot reach. Adding TELEGRAM_LINK_HOST as an explicit override makes the behavior deterministic and deployable."
+    }
+  ]
+}
