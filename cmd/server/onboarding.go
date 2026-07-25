@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rahat/rahat/internal/auth"
 	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
@@ -32,6 +33,8 @@ type onboardingHandler struct {
 	prefs             *preferences.Service
 	tasks             *taskpkg.Service
 	scheduler         *scheduler.Service
+	auth              *auth.Service
+	webAuth           *authHandler
 	bot               ntg.BotClient
 	logger            *slog.Logger
 	telegramAvailable bool
@@ -717,6 +720,12 @@ func (h *onboardingHandler) handleDeleteTask(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *onboardingHandler) handleFinish(w http.ResponseWriter, r *http.Request) {
+	if h.webAuth != nil {
+		if err := h.webAuth.requireTrustedOrigin(r); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
 	session, ok := h.requireUserSession(w, r)
 	if !ok {
 		return
@@ -740,6 +749,14 @@ func (h *onboardingHandler) handleFinish(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if h.auth != nil && h.webAuth != nil {
+		createdSession, rawSessionToken, err := h.auth.CreateSessionForUser(r.Context(), session.UserID)
+		if err != nil {
+			writeAuthError(w, err)
+			return
+		}
+		h.webAuth.writeSessionCookie(w, rawSessionToken, createdSession.ExpiresAt)
 	}
 	writeJSON(w, http.StatusOK, buildFinishResponse(user, taskDefs, plan))
 }

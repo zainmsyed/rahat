@@ -11,8 +11,6 @@
 		getState,
 		getStoredOnboardingToken,
 		readTokenFromUrl,
-		setStoredOnboardingToken,
-		syncTokenInUrl,
 		type OnboardingFinishResult,
 		type OnboardingState
 	} from '$lib/api/onboarding';
@@ -32,8 +30,6 @@
 			await goto('/onboarding');
 			return;
 		}
-		setStoredOnboardingToken(sessionToken);
-		syncTokenInUrl(sessionToken);
 		await refreshState();
 	});
 
@@ -61,6 +57,8 @@
 		finishing = true;
 		try {
 			finishResult = await finishOnboarding(sessionToken);
+			clearStoredOnboardingToken();
+			await goto('/');
 		} catch (error) {
 			pageError = error instanceof Error ? error.message : 'Could not finish onboarding.';
 		} finally {

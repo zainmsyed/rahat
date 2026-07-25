@@ -27,6 +27,10 @@
 		inviteCode = readInviteCodeFromUrl();
 		const sessionToken = readTokenFromUrl() || getStoredOnboardingToken();
 		if (!sessionToken) {
+			if (inviteCode.trim()) {
+				await startSession();
+				return;
+			}
 			loading = false;
 			return;
 		}
@@ -73,7 +77,7 @@
 		<section class="panel active">
 			<p class="label">Step 1 · Required</p>
 			<h2>Start with your invite code</h2>
-			<p>Type the invite code you received, then press the button to begin your guided setup.</p>
+			<p>If you opened a setup link, Rahat starts automatically. Otherwise, type the invite code you received and press the button.</p>
 
 			<label>
 				<span>Invite code *</span>

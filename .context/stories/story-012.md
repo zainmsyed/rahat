@@ -1,10 +1,10 @@
 # Story 012: Establish durable beta web sessions
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** auth  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
-**Completed:** —
+**Completed:** 2026-07-25
 
 ---
 
@@ -56,6 +56,7 @@ A tester can finish onboarding and remain signed in on that browser, sign out, a
 ---
 
 ## Issues
+- Scope note: implementation touched `internal/config/config.go` to align the default `WEB_ORIGIN` with the repository's Vite dev port (`http://localhost:5200`). This was a small integration cleanup needed so session cookies, CORS, generated setup links, and local visual verification use the same default frontend origin.
 
 ---
 
@@ -67,4 +68,4 @@ Onboarding completion now promotes the user into a real web session by setting a
 
 On the web side, SvelteKit now has a minimal `/login` page for access-link exchange and sign-out, a server hook that enforces authenticated routing for protected pages, and onboarding finish now stores the session cookie and clears the temporary onboarding token path. New-tester setup is simpler for the MVP: `scripts/issue-onboarding-link.sh` prints a `/onboarding?invite=...` URL that starts onboarding automatically without asking the tester to type the invite code. Operator recovery uses `scripts/issue-beta-access.sh <user-id-or-email>` / `go run ./cmd/server ops:issue-access-link ...` to produce single-use beta access links for existing testers.
 
-Verification completed with `go test ./...`, `cd web && npm run check`, and `cd web && npm test`. Documentation was updated in `README.md` and `deploy/README.md` to cover `WEB_SESSION_SECRET`, beta access issuance, cookie/origin requirements, and tester recovery flow.
+Verification completed with `go test ./...`, `cd web && npm run check`, and `cd web && npm test`. Documentation was updated in `README.md` and `deploy/README.md` to cover `WEB_SESSION_SECRET`, beta access issuance, cookie/origin requirements, setup-link visual verification, and tester recovery flow.

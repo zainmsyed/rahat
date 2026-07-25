@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rahat/rahat/internal/app"
+	"github.com/rahat/rahat/internal/auth"
 	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	googcalendar "github.com/rahat/rahat/internal/calendar/google"
 	"github.com/rahat/rahat/internal/checkins"
@@ -35,7 +36,11 @@ import (
 
 func main() {
 	cfg := config.Load()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	logOutput := os.Stdout
+	if shouldLogCLIToStderr(os.Args) {
+		logOutput = os.Stderr
+	}
+	logger := slog.New(slog.NewJSONHandler(logOutput, &slog.HandlerOptions{Level: cfg.LogLevel}))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -71,6 +76,12 @@ func main() {
 		lookaheadSecret = "development-lookahead-secret"
 	}
 	lookaheadTokens := tokens.NewManager(lookaheadSecret)
+	sessionSecret := os.Getenv("WEB_SESSION_SECRET")
+	if sessionSecret == "" && cfg.AppEnv == "development" {
+		sessionSecret = "development-web-session-secret"
+	}
+	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), sessionSecret, 30*24*time.Hour)
+	authRoutes := &authHandler{auth: authService, users: userService, webOrigin: cfg.WebOrigin, appEnv: cfg.AppEnv}
 	googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
 
@@ -89,6 +100,8 @@ func main() {
 		prefs:             prefService,
 		tasks:             taskService,
 		scheduler:         schedulerService,
+		auth:              authService,
+		webAuth:           authRoutes,
 		logger:            logger,
 		telegramAvailable: telegramAvailable,
 		botUsername:       botUsername,
@@ -96,6 +109,7 @@ func main() {
 		googleAvailable:   googleAvailable,
 	}
 	onboardingService.register(mux)
+	authRoutes.register(mux)
 	(&lookaheadHandler{tokens: lookaheadTokens, users: userService, tasks: taskService, scheduler: schedulerService, allowTokenIssue: os.Getenv("LOOKAHEAD_TOKEN_ISSUER_ENABLED") == "true"}).register(mux)
 
 	if botToken != "" {
@@ -145,6 +159,7 @@ func main() {
 	}
 
 	ops := newOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath, userService, taskService, prefService, schedulerService, telegramService, calendarService, eventService, lookaheadTokens)
+	opsAuth := authRoutes
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "ops:run-job":
@@ -191,6 +206,23 @@ func main() {
 			}
 			logger.Info("seed testers complete")
 			return
+		case "ops:issue-access-link":
+			if len(os.Args) < 3 {
+				logger.Error("missing user id or email")
+				os.Exit(1)
+			}
+			result, err := opsAuth.issueAccessLink(ctx, os.Args[2], time.Hour)
+			if err != nil {
+				logger.Error("issue access link failed", "error", err)
+				os.Exit(1)
+			}
+			payload, err := writeIssueLinkJSON(result)
+			if err != nil {
+				logger.Error("encode issue access link result failed", "error", err)
+				os.Exit(1)
+			}
+			_, _ = os.Stdout.Write(append(payload, '\n'))
+			return
 		case "ops:reset-nonprod":
 			if err := ops.resetNonProduction(ctx, os.Getenv("RAHAT_RESET_CONFIRM")); err != nil {
 				logger.Error("reset failed", "error", err)
@@ -201,23 +233,18 @@ func main() {
 		}
 	}
 
-	mux.HandleFunc("GET /calendar/google/auth-url", func(w http.ResponseWriter, r *http.Request) {
-		userID := r.URL.Query().Get("user_id")
-		if userID == "" {
-			http.Error(w, "missing user_id", http.StatusBadRequest)
-			return
-		}
+	mux.HandleFunc("GET /calendar/google/auth-url", requireAuthenticatedUserForRoute(authRoutes, func(w http.ResponseWriter, r *http.Request, current authenticatedUser) {
 		if os.Getenv("GOOGLE_CLIENT_ID") == "" || os.Getenv("GOOGLE_CLIENT_SECRET") == "" || os.Getenv("GOOGLE_REDIRECT_URL") == "" {
 			http.Error(w, "google oauth not configured", http.StatusServiceUnavailable)
 			return
 		}
-		authURL, err := calendarService.GoogleAuthURL(r.Context(), userID)
+		authURL, err := calendarService.GoogleAuthURL(r.Context(), current.User.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"auth_url": authURL})
-	})
+	}))
 	mux.HandleFunc("POST /calendar/google/connect", func(w http.ResponseWriter, r *http.Request) {
 		state := r.URL.Query().Get("state")
 		code := r.URL.Query().Get("code")
@@ -232,34 +259,28 @@ func main() {
 		}
 		writeJSON(w, http.StatusOK, connection)
 	})
-	mux.HandleFunc("POST /calendar/google/sync", func(w http.ResponseWriter, r *http.Request) {
-		userID := r.URL.Query().Get("user_id")
-		day := parseDay(r.URL.Query().Get("date"))
-		if userID == "" {
-			http.Error(w, "missing user_id", http.StatusBadRequest)
+	mux.HandleFunc("POST /calendar/google/sync", requireAuthenticatedUserForRoute(authRoutes, func(w http.ResponseWriter, r *http.Request, current authenticatedUser) {
+		if err := authRoutes.requireTrustedOrigin(r); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		blocks, err := calendarService.SyncGoogleDay(r.Context(), userID, day)
+		day := parseDay(r.URL.Query().Get("date"))
+		blocks, err := calendarService.SyncGoogleDay(r.Context(), current.User.ID, day)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		writeJSON(w, http.StatusAccepted, map[string]any{"blocks": blocks})
-	})
-	mux.HandleFunc("GET /schedule/plan", func(w http.ResponseWriter, r *http.Request) {
-		userID := r.URL.Query().Get("user_id")
+	}))
+	mux.HandleFunc("GET /schedule/plan", requireAuthenticatedUserForRoute(authRoutes, func(w http.ResponseWriter, r *http.Request, current authenticatedUser) {
 		day := parseDay(r.URL.Query().Get("date"))
-		if userID == "" {
-			http.Error(w, "missing user_id", http.StatusBadRequest)
-			return
-		}
-		result, err := schedulerService.PlanDay(r.Context(), userID, day)
+		result, err := schedulerService.PlanDay(r.Context(), current.User.ID, day)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
-	})
+	}))
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -326,6 +347,10 @@ func shouldUseTelegramWebhook(webhookURL, webhookSecret string) bool {
 	return true
 }
 
+func shouldLogCLIToStderr(args []string) bool {
+	return len(args) > 1 && strings.HasPrefix(args[1], "ops:")
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -341,6 +366,7 @@ func withCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

@@ -109,6 +109,7 @@ const storageKey = 'rahat-onboarding-token';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${apiBaseUrl}${path}`, {
+		credentials: 'include',
 		headers: {
 			'Content-Type': 'application/json',
 			...(init?.headers ?? {})

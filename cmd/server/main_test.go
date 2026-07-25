@@ -67,6 +67,15 @@ func TestConfigureTelegramTransportFallsBackToLongPollingWithoutWebhook(t *testi
 	}
 }
 
+func TestShouldLogCLIToStderr(t *testing.T) {
+	if !shouldLogCLIToStderr([]string{"server", "ops:issue-access-link"}) {
+		t.Fatal("expected ops command logs to use stderr")
+	}
+	if shouldLogCLIToStderr([]string{"server"}) {
+		t.Fatal("expected normal server logs to use stdout")
+	}
+}
+
 func TestShouldUseTelegramWebhook(t *testing.T) {
 	tests := []struct {
 		name   string

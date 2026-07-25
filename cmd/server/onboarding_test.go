@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahat/rahat/internal/auth"
 	calendarpkg "github.com/rahat/rahat/internal/calendar"
 	"github.com/rahat/rahat/internal/db"
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
@@ -54,6 +55,8 @@ func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
 	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, &fakeCalendarOAuthClient{authURL: "https://accounts.google.test/oauth?state="})
+	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), "test-web-session-secret", 30*24*time.Hour)
+	webAuth := &authHandler{auth: authService, users: userService, webOrigin: "http://localhost:5200", appEnv: "development"}
 
 	return &onboardingHandler{
 		sessions:          newOnboardingSessionStore("rahat-beta"),
@@ -61,6 +64,8 @@ func newTestOnboardingHandler(t *testing.T) *onboardingHandler {
 		prefs:             preferences.NewService(preferences.NewRepository(sqlDB)),
 		tasks:             taskService,
 		scheduler:         schedulerService,
+		auth:              authService,
+		webAuth:           webAuth,
 		telegramAvailable: true,
 		botUsername:       "RahatTestBot",
 		calendarService:   calendarService,
@@ -281,11 +286,15 @@ func TestOnboardingFinishEndpoint(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+	req.Header.Set("Origin", "http://localhost:5200")
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("finish status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if cookie := rec.Header().Get("Set-Cookie"); !strings.Contains(cookie, sessionCookieName+"=") {
+		t.Fatalf("expected session cookie, got %q", cookie)
 	}
 	var result onboardingFinishResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
@@ -310,6 +319,7 @@ func TestOnboardingFinishRequiresTasks(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	req = httptest.NewRequest(http.MethodPost, "/onboarding/finish?token="+session.Token, http.NoBody)
+	req.Header.Set("Origin", "http://localhost:5200")
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

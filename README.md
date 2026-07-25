@@ -38,6 +38,7 @@ Key variables:
 - `TELEGRAM_API_BASE_URL`: optional custom Telegram API base URL
 - `LOOKAHEAD_TOKEN_SECRET`: required in production for signed read-only lookahead links
 - `LOOKAHEAD_TOKEN_ISSUER_ENABLED`: explicit opt-in for the non-production lookahead token helper
+- `WEB_SESSION_SECRET`: required in production for hashing beta access grants and durable web sessions
 - `EMAIL_RECAP_OUTBOX_DIR`: file outbox path used by the recap job
 - `BACKUP_TARGET_URI`: backup destination, either a local path / `file://` path or an `s3://` URI
 
@@ -75,7 +76,7 @@ set -a && source .env && set +a
 make web
 ```
 
-The web app starts on `http://localhost:5173` by default.
+The web app starts on `http://localhost:5200` by default.
 
 ### 4. Ops commands and scripts
 
@@ -95,6 +96,12 @@ bash scripts/run-backup.sh
 # Report event activity (JSON by default, or REPORT_FORMAT=csv)
 bash scripts/report-events.sh
 
+# Issue a setup link for a new tester; opens onboarding automatically
+bash scripts/issue-onboarding-link.sh
+
+# Issue a one-time beta access link for an existing tester
+bash scripts/issue-beta-access.sh tester.one@example.com
+
 # Seed demo testers into a non-production database
 bash scripts/bootstrap-testers.sh
 
@@ -103,6 +110,17 @@ RAHAT_RESET_CONFIRM=reset-non-production bash scripts/reset-nonprod.sh
 ```
 
 All scripts source `.env` automatically when it exists and call the matching `go run ./cmd/server ops:...` command.
+
+## Beta web sessions
+
+Story 012 adds durable beta browser sessions backed by secure HttpOnly cookies rather than permanent onboarding tokens.
+
+- New testers can start from `bash scripts/issue-onboarding-link.sh`; the generated `/onboarding?invite=...` URL starts setup automatically without asking them to type the invite code.
+- Visual check: open the generated setup URL and confirm it briefly shows “Opening your onboarding steps…” before moving straight to the profile step, with no invite-code typing required.
+- Finishing onboarding creates a web session on that browser.
+- A signed-out tester can regain access through an operator-issued one-time link that opens `/login?token=...`.
+- Generate a recovery link with `bash scripts/issue-beta-access.sh <user-id-or-email>`.
+- In production, set `WEB_SESSION_SECRET` to a strong random secret and serve the frontend from the configured `WEB_ORIGIN` so cookie origin checks succeed.
 
 ### 5. Run the local verification target
 
@@ -123,7 +141,7 @@ curl http://localhost:8080/readyz
 
 Then open:
 
-- `http://localhost:5173` for the placeholder Rahat page
+- `http://localhost:5200` for the placeholder Rahat page
 - `http://localhost:8080/healthz` for backend health
 - `http://localhost:8080/readyz` for backend readiness
 

@@ -25,7 +25,7 @@ func Load() Config {
 		HTTPAddr:     httpAddr,
 		DatabasePath: getenv("DATABASE_PATH", "./var/rahat.sqlite3"),
 		LogLevel:     parseLogLevel(getenv("LOG_LEVEL", "info")),
-		WebOrigin:    getenv("WEB_ORIGIN", "http://localhost:5173"),
+		WebOrigin:    getenv("WEB_ORIGIN", "http://localhost:5200"),
 	}
 }
 
