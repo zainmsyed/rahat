@@ -1,6 +1,6 @@
 # Story 016: Make the daily scheduler fit realistic task combinations
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature / bug-fix  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
@@ -48,12 +48,25 @@ Laundry (25 min) + Clean kitchen (20 min) = 45 min, which fits easily in a 60-mi
 - Story 015
 
 ## Checklist
-- [ ] Diagnose the exact budget-split logic that causes feasible combinations to fail
-- [ ] Implement a scheduler strategy that fits tasks when total duration <= daily budget, while still respecting windows and preferences
-- [ ] Add tests for the scenarios above
-- [ ] Ensure existing scheduler tests still pass
-- [ ] Update this story with the fix and any migration notes
+- [x] Diagnose the exact budget-split logic that causes feasible combinations to fail
+- [x] Implement a scheduler strategy that fits tasks when total duration <= daily budget, while still respecting windows and preferences
+- [x] Add tests for the scenarios above
+- [x] Ensure existing scheduler tests still pass
+- [x] Update this story with the fix and any migration notes
 
 ## Issues
 
 ## Completion Summary
+
+Implemented two scheduler changes in `internal/scheduler/service.go`:
+
+1. **Demand-aware window budgeting** (`splitWindowBudgets`): when the total demand of the day's candidates fits within the daily budget, each window is allocated exactly its demand instead of a proportional split. Leftover minutes are distributed to windows not blocked by the calendar. This lets feasible multi-window combinations like Laundry + Clean kitchen (45 min in a 60-min day) schedule successfully.
+
+2. **Fallback window placement** (`tryFitCandidate`): when a task cannot fit its preferred window, the scheduler now tries other windows in order before overflowing, as long as the total day budget allows it and subtask ordering is respected.
+
+Added `TestSchedulerFitsRealisticCombinations` in `internal/scheduler/service_test.go` covering:
+- Laundry + Clean kitchen in a 60-minute day schedules all four items.
+- A 60-minute Grocery run alone schedules.
+- Meal prep + Clean kitchen honestly overflows one item because their combined 65 minutes exceeds the 60-minute budget.
+
+All existing scheduler tests and the full `go test ./...` / `npm test` suites pass. No new migrations were needed.

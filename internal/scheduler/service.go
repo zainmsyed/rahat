@@ -63,7 +63,7 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 		return PlanResult{}, err
 	}
 
-	windowBudgets := splitWindowBudgets(user.DailyTimeBudgetMinutes, candidates)
+	windowBudgets := splitWindowBudgets(user.DailyTimeBudgetMinutes, candidates, constraints)
 	applyCalendarBudgets(windowBudgets, constraints)
 	scheduled, overflowed, skipped := fitCandidates(candidates, windowBudgets, planDate, constraints)
 
@@ -196,7 +196,7 @@ func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User
 		return PlanResult{}, nil, err
 	}
 
-	windowBudgets := splitWindowBudgets(user.DailyTimeBudgetMinutes, candidates)
+	windowBudgets := splitWindowBudgets(user.DailyTimeBudgetMinutes, candidates, constraints)
 	applyCalendarBudgets(windowBudgets, constraints)
 	scheduled, overflowed, skipped := fitCandidates(candidates, windowBudgets, planDate, constraints)
 
@@ -549,7 +549,7 @@ func startOfWeek(day time.Time) time.Time {
 	return time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -(weekday - 1))
 }
 
-func splitWindowBudgets(total int, candidates []scheduledCandidate) map[string]int {
+func splitWindowBudgets(total int, candidates []scheduledCandidate, constraints calendarConstraints) map[string]int {
 	budgets := map[string]int{"morning": 0, "afternoon": 0, "evening": 0}
 	if total <= 0 {
 		return budgets
@@ -571,6 +571,38 @@ func splitWindowBudgets(total int, candidates []scheduledCandidate) map[string]i
 		return budgets
 	}
 
+	// If everything fits in the daily budget, allocate each window exactly the
+	// demand it needs, then distribute the leftover minutes to windows that are
+	// not blocked by the calendar. This prevents artificial per-window caps from
+	// making feasible combinations fail.
+	if totalDemand <= total {
+		budgets["morning"] = demand["morning"]
+		budgets["afternoon"] = demand["afternoon"]
+		budgets["evening"] = demand["evening"]
+		leftover := total - totalDemand
+		if leftover > 0 {
+			unblocked := []string{}
+			for _, window := range []string{"morning", "afternoon", "evening"} {
+				if !constraints.ZeroBudgetWindows[window] {
+					unblocked = append(unblocked, window)
+				}
+			}
+			if len(unblocked) > 0 {
+				per := leftover / len(unblocked)
+				rem := leftover % len(unblocked)
+				for i, window := range unblocked {
+					budgets[window] += per
+					if i < rem {
+						budgets[window]++
+					}
+				}
+			}
+		}
+		return budgets
+	}
+
+	// When demand exceeds the daily budget, fall back to a proportional split so
+	// each window gets a fair share of the limited time.
 	allocated := 0
 	for idx, window := range []string{"morning", "afternoon", "evening"} {
 		if idx == 2 {
@@ -728,19 +760,66 @@ func tryFitCandidateGroup(group []scheduledCandidate, used, stepWindows map[stri
 
 func tryFitCandidate(candidate scheduledCandidate, used, stepWindows map[string]int, stepReadyAt map[string]time.Time, budgets map[string]int, planDate time.Time, constraints calendarConstraints) (scheduledCandidate, bool) {
 	candidate = prepareCandidate(candidate, stepWindows, stepReadyAt, planDate)
-	window := string(candidate.Window)
+	preferred := string(candidate.Window)
+	for _, window := range fallbackWindows(preferred) {
+		if fitted, ok := tryFitInWindow(candidate, window, used, stepWindows, stepReadyAt, budgets, planDate, constraints); ok {
+			return fitted, true
+		}
+	}
+	return candidate, false
+}
+
+func fallbackWindows(preferred string) []string {
+	order := []string{"morning", "afternoon", "evening"}
+	result := make([]string, 0, len(order))
+	if preferred != "" {
+		result = append(result, preferred)
+	}
+	for _, window := range order {
+		if window != preferred {
+			result = append(result, window)
+		}
+	}
+	return result
+}
+
+func tryFitInWindow(candidate scheduledCandidate, window string, used, stepWindows map[string]int, stepReadyAt map[string]time.Time, budgets map[string]int, planDate time.Time, constraints calendarConstraints) (scheduledCandidate, bool) {
+	// Subtask chains cannot move to a window earlier than a previously scheduled step.
+	if candidate.Subtask != nil {
+		if prevOrder, ok := stepWindows[candidate.Task.ID]; ok {
+			if daytime.Order(window) < prevOrder {
+				return candidate, false
+			}
+		}
+	}
+
+	readyAt := daytime.StartTime(planDate, window)
+	if candidate.Subtask != nil {
+		if prevReady, ok := stepReadyAt[candidate.Task.ID]; ok {
+			minReady := prevReady.Add(time.Duration(candidate.Subtask.GapRule.MinGapAfterPreviousMinutes) * time.Minute)
+			if minReady.After(readyAt) {
+				readyAt = minReady
+			}
+			// If the required gap pushes the step out of this window, the window cannot hold it.
+			if shiftedWindow, ok := daytime.WindowForTime(planDate, readyAt); !ok || shiftedWindow != window {
+				return candidate, false
+			}
+		}
+	}
+
 	if constraints.SmallTaskOnlyReason != "" && candidate.Duration > 15 {
 		return candidate, false
 	}
 	if used[window]+candidate.Duration > budgets[window] {
 		return candidate, false
 	}
+
 	used[window] += candidate.Duration
+	candidate.Window = tasks.TimeOfDayPreference(window)
+	candidate.Occurrence.ReadyAt = &readyAt
 	if candidate.Subtask != nil {
 		stepWindows[candidate.Task.ID] = daytime.Order(window)
-		if candidate.Occurrence.ReadyAt != nil {
-			stepReadyAt[candidate.Task.ID] = *candidate.Occurrence.ReadyAt
-		}
+		stepReadyAt[candidate.Task.ID] = readyAt
 	}
 	return candidate, true
 }

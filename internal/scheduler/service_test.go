@@ -505,6 +505,138 @@ func TestPreviewRangeCarriesOverflowStateIntoTomorrow(t *testing.T) {
 	}
 }
 
+func TestSchedulerFitsRealisticCombinations(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		seed           func(context.Context, *testing.T, *users.Service, *tasks.Service) string
+		day            time.Time
+		budget         int
+		wantScheduled  int
+		wantOverflowed int
+		wantSkipped    int
+		assert         func(*testing.T, scheduler.PlanResult)
+	}{
+		{
+			name: "laundry and clean kitchen fit in 60 minute day",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service) string {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Laundry + Clean", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Laundry", DurationMinutes: 25, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAny, IsMultistep: true}, []tasks.Subtask{
+					{Name: "Wash", StepOrder: 1, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayMorning},
+					{Name: "Move to dryer", StepOrder: 2, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayAfternoon},
+					{Name: "Fold", StepOrder: 3, DurationMinutes: 15, TimeOfDayPreference: tasks.TimeOfDayEvening},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Clean kitchen", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayEvening}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return user.ID
+			},
+			day:            time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
+			budget:         60,
+			wantScheduled:  4,
+			wantOverflowed: 0,
+			wantSkipped:    0,
+			assert: func(t *testing.T, result scheduler.PlanResult) {
+				windows := map[string]int{}
+				for _, occ := range result.Scheduled {
+					windows[string(occ.ScheduledTimeOfDay)]++
+				}
+				if windows["morning"] != 1 || windows["afternoon"] != 1 || windows["evening"] != 2 {
+					t.Fatalf("expected 1 morning, 1 afternoon, 2 evening, got %+v", windows)
+				}
+			},
+		},
+		{
+			name: "grocery run alone fits in 60 minute day",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service) string {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Grocery", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Grocery run", DurationMinutes: 60, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 7, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return user.ID
+			},
+			day:            time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
+			budget:         60,
+			wantScheduled:  1,
+			wantOverflowed: 0,
+			wantSkipped:    0,
+		},
+		{
+			name: "meal prep and clean kitchen honestly overflow when total exceeds budget",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service) string {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Overflow", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Meal prep", DurationMinutes: 45, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Clean kitchen", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayEvening}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return user.ID
+			},
+			day:            time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
+			budget:         60,
+			wantScheduled:  1,
+			wantOverflowed: 1,
+			wantSkipped:    0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			sqlDB := openTestDB(t)
+			if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+				t.Fatalf("ApplyMigrations() error = %v", err)
+			}
+
+			userService := users.NewService(users.NewRepository(sqlDB))
+			taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+			occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+			checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+			blockRepo := store.NewCalendarBlockRepository(sqlDB)
+			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+			userID := tt.seed(ctx, t, userService, taskService)
+			result, err := svc.PlanDay(ctx, userID, tt.day)
+			if err != nil {
+				t.Fatalf("PlanDay() error = %v", err)
+			}
+			if len(result.Scheduled) != tt.wantScheduled {
+				t.Fatalf("len(Scheduled) = %d, want %d", len(result.Scheduled), tt.wantScheduled)
+			}
+			if len(result.Overflowed) != tt.wantOverflowed {
+				t.Fatalf("len(Overflowed) = %d, want %d", len(result.Overflowed), tt.wantOverflowed)
+			}
+			if len(result.Skipped) != tt.wantSkipped {
+				t.Fatalf("len(Skipped) = %d, want %d", len(result.Skipped), tt.wantSkipped)
+			}
+			if tt.assert != nil {
+				tt.assert(t, result)
+			}
+		})
+	}
+}
+
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB, err := db.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "rahat.sqlite3"))
