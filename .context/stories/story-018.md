@@ -3,6 +3,7 @@
 **Status:** planned  
 **Type:** feature / bug-fix  
 **Created:** 2026-07-25  
+**Last accessed:** 2026-07-25  
 **Completed:** —
 
 ---

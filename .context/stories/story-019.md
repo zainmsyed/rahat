@@ -3,6 +3,7 @@
 **Status:** planned  
 **Type:** feature  
 **Created:** 2026-07-25  
+**Last accessed:** 2026-07-25  
 **Completed:** —
 
 ---
