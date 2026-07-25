@@ -98,7 +98,6 @@
 <div class="page">
 	<header class="topbar">
 		<a class="wordmark" href="/">Rah<span>at</span></a>
-		<a class="nav" href="/lookahead">Lookahead</a>
 	</header>
 
 	<section class="hero">
@@ -151,26 +150,42 @@
 {/if}
 
 <style>
-	:global(body) { margin: 0; font-family: Outfit, system-ui, sans-serif; background: #faf7f2; color: #1f1d1a; }
-	.page { max-width: 980px; margin: 0 auto; padding: 28px 20px 80px; }
+	:global(:root) {
+		--rahat-primary: #7a9b76;
+		--rahat-primary-deep: #5a7a56;
+		--rahat-primary-glow: rgba(122, 155, 118, 0.22);
+		--rahat-rose: #b87a7a;
+		--rahat-bg: #faf7f2;
+		--rahat-surface-soft: #f4f0e6;
+		--rahat-paper: #ffffff;
+		--rahat-ink: #1f1d1a;
+		--rahat-ink-secondary: #4a4640;
+		--rahat-ink-muted: #8a8278;
+		--rahat-line: #e3dccc;
+		--rahat-line-soft: #ebe5d8;
+		--rahat-shadow-sm: 0 1px 2px rgba(31,29,26,.04), 0 4px 12px -4px rgba(31,29,26,.06);
+		--rahat-shadow-md: 0 2px 8px rgba(31,29,26,.05), 0 12px 32px -12px rgba(31,29,26,.08);
+		--rahat-overlay: rgba(31,29,26,.28);
+	}
+	:global(body) { margin: 0; font-family: Outfit, system-ui, sans-serif; background: var(--rahat-bg); color: var(--rahat-ink); }
+	.page { max-width: 980px; margin: 0 auto; padding: 32px 20px 48px; }
 	.topbar, .actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-	.wordmark { font-family: 'DM Serif Display', Georgia, serif; font-size: 24px; color: #1f1d1a; text-decoration: none; }
-	.wordmark span, .eyebrow { color: #5a7a56; }
-	.nav { color: #4a4640; }
-	.hero, .panel, .modal { background: #fff; border: 1px solid #e3dccc; border-radius: 20px; box-shadow: 0 2px 8px rgba(31,29,26,.05), 0 12px 32px -12px rgba(31,29,26,.08); }
-	.hero { margin: 24px 0; padding: 36px; display: grid; gap: 16px; }
+	.wordmark { font-family: 'DM Serif Display', Georgia, serif; font-size: 24px; color: var(--rahat-ink); text-decoration: none; }
+	.wordmark span, .eyebrow { color: var(--rahat-primary-deep); }
+	.hero, .panel, .modal { background: var(--rahat-paper); border: 1px solid var(--rahat-line); border-radius: 20px; box-shadow: var(--rahat-shadow-md); }
+	.hero { margin: 24px 0; padding: 40px; display: grid; gap: 16px; }
 	.panel { padding: 24px; }
 	.eyebrow { margin: 0; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; }
-	h1 { margin: 0; font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(34px, 6vw, 52px); line-height: 1.05; font-weight: 400; }
-	p { color: #4a4640; line-height: 1.6; }
-	button { border: 0; border-radius: 999px; background: #7a9b76; color: #fff; padding: 13px 18px; font: inherit; font-weight: 700; cursor: pointer; }
-	button:hover { background: #5a7a56; }
-	button.ghost { background: transparent; color: #4a4640; border: 1.5px solid #e3dccc; }
-	button.danger { background: #b87a7a; }
+	h1 { margin: 0; font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(32px, 6vw, 40px); line-height: 1.05; font-weight: 400; }
+	p { color: var(--rahat-ink-secondary); line-height: 1.6; }
+	button { border: 0; border-radius: 999px; background: var(--rahat-primary); color: var(--rahat-paper); padding: 12px 20px; font: inherit; font-weight: 700; cursor: pointer; }
+	button:hover { background: var(--rahat-primary-deep); }
+	button.ghost { background: transparent; color: var(--rahat-ink-secondary); border: 1.5px solid var(--rahat-line); }
+	button.danger { background: var(--rahat-rose); }
 	button:disabled { opacity: .65; cursor: wait; }
-	.notice { padding: 16px 18px; background: #f4f0e6; border: 1px solid #ebe5d8; border-radius: 12px; }
-	.error { color: #8f3d3d; }
-	.modal-backdrop { position: fixed; inset: 0; background: rgba(31,29,26,.28); display: grid; place-items: center; padding: 20px; }
-	.modal { max-width: 440px; padding: 28px; }
+	.notice { padding: 16px 20px; background: var(--rahat-surface-soft); border: 1px solid var(--rahat-line-soft); border-radius: 12px; }
+	.error { color: var(--rahat-rose); }
+	.modal-backdrop { position: fixed; inset: 0; background: var(--rahat-overlay); display: grid; place-items: center; padding: 20px; }
+	.modal { max-width: 440px; padding: 32px; }
 	@media (max-width: 700px) { .hero { padding: 24px; } }
 </style>

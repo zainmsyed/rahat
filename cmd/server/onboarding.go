@@ -79,6 +79,7 @@ type onboardingTaskRequest struct {
 }
 
 type onboardingSubtaskRequest struct {
+	ID                         string                        `json:"id,omitempty"`
 	Name                       string                        `json:"name"`
 	DurationMinutes            int                           `json:"duration_minutes"`
 	TimeOfDayPreference        taskpkg.TimeOfDayPreference   `json:"time_of_day_preference"`
@@ -891,7 +892,7 @@ func validateTaskRequest(userID string, req onboardingTaskRequest) (taskpkg.Task
 			if dependencyType != taskpkg.SubtaskDependencyRequiredSameDay && dependencyType != taskpkg.SubtaskDependencySoftFollowup {
 				return taskpkg.Task{}, nil, fmt.Errorf("step %d has an unrecognized dependency type", i+1)
 			}
-			subtasks = append(subtasks, taskpkg.Subtask{StepOrder: i + 1, Name: stepName, DurationMinutes: raw.DurationMinutes, TimeOfDayPreference: raw.TimeOfDayPreference, DependencyType: dependencyType, GapRule: taskpkg.SubtaskGapRule{MinGapAfterPreviousMinutes: raw.MinGapAfterPreviousMinutes}})
+			subtasks = append(subtasks, taskpkg.Subtask{ID: strings.TrimSpace(raw.ID), StepOrder: i + 1, Name: stepName, DurationMinutes: raw.DurationMinutes, TimeOfDayPreference: raw.TimeOfDayPreference, DependencyType: dependencyType, GapRule: taskpkg.SubtaskGapRule{MinGapAfterPreviousMinutes: raw.MinGapAfterPreviousMinutes}})
 		}
 	} else if req.DurationMinutes < 1 || req.DurationMinutes > 240 {
 		return taskpkg.Task{}, nil, errors.New("task duration must be between 1 and 240 minutes")

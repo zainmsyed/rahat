@@ -24,8 +24,8 @@
 - Production-bound HTTP handlers must not use wildcard CORS; allowed origins must be configurable and default to the local dev origin rather than '*'. <!-- source: story-006 --> <!-- confidence: low — no signal in last 5 stories -->
 - New backend handlers and service methods must ship with unit or integration tests covering the happy path and the main error paths. <!-- source: story-006 --> <!-- confidence: low — no signal in last 5 stories -->
 - Generated dependency/build/runtime directories and local env files must be covered by committed VCS ignore rules before broad staging or closeout flows run, so package installs and local runs do not flood commits with machine-generated files. <!-- source: story-006 --> <!-- confidence: low — no signal in last 5 stories -->
-- Avoid third-party services for rendering sensitive onboarding credentials; generate QR codes and similar one-user secrets locally. <!-- source: story-007 --> <!-- confidence: high -->
-- Every webhook handler must have automated tests for each update type it routes. <!-- source: story-007 --> <!-- confidence: high -->
+- Avoid third-party services for rendering sensitive onboarding credentials; generate QR codes and similar one-user secrets locally. <!-- source: story-007 --> <!-- confidence: low — no signal in last 5 stories -->
+- Every webhook handler must have automated tests for each update type it routes. <!-- source: story-007 --> <!-- confidence: low — no signal in last 5 stories -->
 - Keep the API base URL and similar endpoint configuration in a single exported frontend constant; do not duplicate it across route modules. <!-- source: story-008 --> <!-- confidence: high -->
 - OAuth account-link flows should reuse a valid, unconsumed initiation state for the same user/session instead of generating a new state row on every page load. <!-- source: story-008 --> <!-- confidence: high -->
 - Multi-day preview endpoints must simulate state transitions between days instead of previewing each day independently from the same persisted base state. <!-- source: story-009 --> <!-- confidence: high -->
@@ -34,3 +34,5 @@
 - Batch jobs that fan out across users must derive day/window context from each user's timezone and return a machine-detectable failure when any user-level work fails. <!-- source: story-011 --> <!-- confidence: high -->
 - CLI/operator commands that print machine-readable payloads should reserve stdout for the payload and send runtime logs to stderr or suppress unrelated initialization logs. <!-- source: story-012 --> <!-- confidence: high -->
 - Protected endpoints must derive user ownership from the authenticated session or verified initiation state, not from raw user_id request parameters. <!-- source: story-012 --> <!-- confidence: high -->
+- Never destructively replace child records referenced by historical data; preserve stable IDs or version/archive the records, and test history retention through edits. <!-- source: story-013 --> <!-- confidence: high -->
+- Every state-changing endpoint authenticated by a browser cookie must enforce the shared trusted-origin or CSRF policy and test trusted, missing, and mismatched origins. <!-- source: story-013 --> <!-- confidence: high -->

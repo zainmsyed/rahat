@@ -231,15 +231,41 @@ func (r *Repository) GetSubtaskByID(ctx context.Context, id string) (Subtask, er
 }
 
 func (r *Repository) UpdateSubtask(ctx context.Context, subtask Subtask) (Subtask, error) {
-	subtask.DependencyType = normalizeSubtaskDependency(subtask.DependencyType)
-	if _, err := r.db.ExecContext(ctx, `
-		UPDATE subtasks
-		SET step_order = ?, name = ?, duration_minutes = ?, time_of_day_preference = ?, dependency_type = ?, min_gap_after_previous_minutes = ?
-		WHERE id = ?
-	`, subtask.StepOrder, subtask.Name, subtask.DurationMinutes, subtask.TimeOfDayPreference, subtask.DependencyType, subtask.GapRule.MinGapAfterPreviousMinutes, subtask.ID); err != nil {
-		return Subtask{}, fmt.Errorf("update subtask %s: %w", subtask.ID, err)
+	if _, err := updateSubtask(ctx, r.db, subtask); err != nil {
+		return Subtask{}, err
 	}
 	return r.GetSubtaskByID(ctx, subtask.ID)
+}
+
+func updateSubtask(ctx context.Context, exec dbExecutor, subtask Subtask) (Subtask, error) {
+	subtask.DependencyType = normalizeSubtaskDependency(subtask.DependencyType)
+	result, err := exec.ExecContext(ctx, `
+		UPDATE subtasks
+		SET step_order = ?, name = ?, duration_minutes = ?, time_of_day_preference = ?, dependency_type = ?, min_gap_after_previous_minutes = ?, archived_at = NULL
+		WHERE id = ? AND task_id = ? AND archived_at IS NULL
+	`, subtask.StepOrder, subtask.Name, subtask.DurationMinutes, subtask.TimeOfDayPreference, subtask.DependencyType, subtask.GapRule.MinGapAfterPreviousMinutes, subtask.ID, subtask.TaskID)
+	if err != nil {
+		return Subtask{}, fmt.Errorf("update subtask %s: %w", subtask.ID, err)
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+		return Subtask{}, fmt.Errorf("update subtask %s: active subtask not found", subtask.ID)
+	}
+	return subtask, nil
+}
+
+func setSubtaskStepOrder(ctx context.Context, exec dbExecutor, subtaskID string, stepOrder int64) error {
+	if _, err := exec.ExecContext(ctx, `UPDATE subtasks SET step_order = ? WHERE id = ? AND archived_at IS NULL`, stepOrder, subtaskID); err != nil {
+		return fmt.Errorf("temporarily reorder subtask %s: %w", subtaskID, err)
+	}
+	return nil
+}
+
+func archiveSubtask(ctx context.Context, exec dbExecutor, subtaskID string, archivedStepOrder int64) error {
+	now := store.FormatTime(time.Now().UTC())
+	if _, err := exec.ExecContext(ctx, `UPDATE subtasks SET step_order = ?, archived_at = ? WHERE id = ? AND archived_at IS NULL`, archivedStepOrder, now, subtaskID); err != nil {
+		return fmt.Errorf("archive subtask %s: %w", subtaskID, err)
+	}
+	return nil
 }
 
 func (r *Repository) DeleteSubtask(ctx context.Context, id string) error {
@@ -249,18 +275,15 @@ func (r *Repository) DeleteSubtask(ctx context.Context, id string) error {
 	return nil
 }
 
-func deleteSubtasksByTask(ctx context.Context, exec dbExecutor, taskID string) error {
-	if _, err := exec.ExecContext(ctx, `DELETE FROM subtasks WHERE task_id = ?`, taskID); err != nil {
-		return fmt.Errorf("delete subtasks for task %s: %w", taskID, err)
-	}
-	return nil
+func (r *Repository) ListSubtasksByTask(ctx context.Context, taskID string) ([]Subtask, error) {
+	return listSubtasksByTask(ctx, r.db, taskID)
 }
 
-func (r *Repository) ListSubtasksByTask(ctx context.Context, taskID string) ([]Subtask, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func listSubtasksByTask(ctx context.Context, exec dbExecutor, taskID string) ([]Subtask, error) {
+	rows, err := exec.QueryContext(ctx, `
 		SELECT id, task_id, step_order, name, duration_minutes, time_of_day_preference, dependency_type, min_gap_after_previous_minutes, created_at
 		FROM subtasks
-		WHERE task_id = ?
+		WHERE task_id = ? AND archived_at IS NULL
 		ORDER BY step_order, id
 	`, taskID)
 	if err != nil {

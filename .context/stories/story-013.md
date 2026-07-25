@@ -1,10 +1,10 @@
 # Story 013: Add post-onboarding task management
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** feature  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
-**Completed:** —
+**Completed:** 2026-07-25
 
 ---
 

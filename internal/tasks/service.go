@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type Service struct {
@@ -54,7 +55,8 @@ func (s *Service) ReplaceTaskWithSubtasks(ctx context.Context, task Task, subtas
 		return TaskWithSubtasks{}, fmt.Errorf("begin task replace transaction: %w", err)
 	}
 
-	if task.ID == "" {
+	creating := task.ID == ""
+	if creating {
 		createdTask, err := createTask(ctx, tx, task)
 		if err != nil {
 			_ = tx.Rollback()
@@ -68,22 +70,65 @@ func (s *Service) ReplaceTaskWithSubtasks(ctx context.Context, task Task, subtas
 			return TaskWithSubtasks{}, err
 		}
 		task = updatedTask
-		if err := deleteSubtasksByTask(ctx, tx, task.ID); err != nil {
-			_ = tx.Rollback()
-			return TaskWithSubtasks{}, err
-		}
-	}
 
-	createdSubtasks := make([]Subtask, 0, len(subtasks))
-	for _, subtask := range subtasks {
-		subtask.ID = ""
-		subtask.TaskID = task.ID
-		createdSubtask, err := createSubtask(ctx, tx, subtask)
+		existing, err := listSubtasksByTask(ctx, tx, task.ID)
 		if err != nil {
 			_ = tx.Rollback()
 			return TaskWithSubtasks{}, err
 		}
-		createdSubtasks = append(createdSubtasks, createdSubtask)
+		existingByID := make(map[string]Subtask, len(existing))
+		for _, subtask := range existing {
+			existingByID[subtask.ID] = subtask
+		}
+		retained := make(map[string]bool, len(subtasks))
+		for _, subtask := range subtasks {
+			if subtask.ID == "" {
+				continue
+			}
+			if retained[subtask.ID] {
+				_ = tx.Rollback()
+				return TaskWithSubtasks{}, fmt.Errorf("subtask %s appears more than once", subtask.ID)
+			}
+			if _, ok := existingByID[subtask.ID]; !ok {
+				_ = tx.Rollback()
+				return TaskWithSubtasks{}, fmt.Errorf("subtask %s does not belong to task %s", subtask.ID, task.ID)
+			}
+			retained[subtask.ID] = true
+		}
+
+		temporaryOrderBase := time.Now().UTC().UnixNano()
+		for index, existingSubtask := range existing {
+			temporaryOrder := temporaryOrderBase + int64(index)
+			if retained[existingSubtask.ID] {
+				if err := setSubtaskStepOrder(ctx, tx, existingSubtask.ID, temporaryOrder); err != nil {
+					_ = tx.Rollback()
+					return TaskWithSubtasks{}, err
+				}
+				continue
+			}
+			if err := archiveSubtask(ctx, tx, existingSubtask.ID, -temporaryOrder); err != nil {
+				_ = tx.Rollback()
+				return TaskWithSubtasks{}, err
+			}
+		}
+	}
+
+	for _, subtask := range subtasks {
+		subtask.TaskID = task.ID
+		if creating {
+			subtask.ID = ""
+		}
+		if subtask.ID == "" {
+			if _, err := createSubtask(ctx, tx, subtask); err != nil {
+				_ = tx.Rollback()
+				return TaskWithSubtasks{}, err
+			}
+			continue
+		}
+		if _, err := updateSubtask(ctx, tx, subtask); err != nil {
+			_ = tx.Rollback()
+			return TaskWithSubtasks{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

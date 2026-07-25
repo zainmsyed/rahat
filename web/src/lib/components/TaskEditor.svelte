@@ -176,7 +176,7 @@
 
 	label {
 		display: grid;
-		gap: 0.4rem;
+		gap: 8px;
 		font-weight: 600;
 	}
 
@@ -187,20 +187,20 @@
 	input,
 	textarea,
 	select {
-		padding: 0.8rem 0.9rem;
-		border-radius: 0.85rem;
-		border: 1.5px solid #e3dccc;
+		padding: 12px 16px;
+		border-radius: 12px;
+		border: 1.5px solid var(--rahat-line, #e3dccc);
 		font: inherit;
-		color: #1f1d1a;
-		background: #ffffff;
+		color: var(--rahat-ink, #1f1d1a);
+		background: var(--rahat-paper, #ffffff);
 	}
 
 	input:focus,
 	textarea:focus,
 	select:focus {
 		outline: none;
-		border-color: #7a9b76;
-		box-shadow: 0 0 0 4px rgba(122, 155, 118, 0.22);
+		border-color: var(--rahat-primary, #7a9b76);
+		box-shadow: 0 0 0 4px var(--rahat-primary-glow, rgba(122, 155, 118, 0.22));
 	}
 
 	textarea {
@@ -210,8 +210,8 @@
 	.subtasks {
 		padding: 1rem;
 		border-radius: 1rem;
-		background: #f4f0e6;
-		border: 1px solid #ebe5d8;
+		background: var(--rahat-surface-soft, #f4f0e6);
+		border: 1px solid var(--rahat-line-soft, #ebe5d8);
 	}
 
 	.subtask-header,
@@ -232,31 +232,31 @@
 	.subtask-card {
 		margin-top: 1rem;
 		padding-top: 1rem;
-		border-top: 1px solid #e3dccc;
+		border-top: 1px solid var(--rahat-line, #e3dccc);
 		display: grid;
-		gap: 0.8rem;
+		gap: 12px;
 	}
 
 	.empty {
 		margin-top: 0.75rem;
-		color: #8a8278;
+		color: var(--rahat-ink-muted, #8a8278);
 	}
 
 	button {
-		padding: 0.8rem 1rem;
+		padding: 12px 16px;
 		border: none;
 		border-radius: 999px;
-		background: #7a9b76;
-		color: white;
+		background: var(--rahat-primary, #7a9b76);
+		color: var(--rahat-paper, #ffffff);
 		font: inherit;
 		font-weight: 700;
 		cursor: pointer;
 	}
 
 	button.ghost {
-		background: white;
-		color: #4a4640;
-		border: 1.5px solid #e3dccc;
+		background: var(--rahat-paper, #ffffff);
+		color: var(--rahat-ink-secondary, #4a4640);
+		border: 1.5px solid var(--rahat-line, #e3dccc);
 	}
 
 	button:disabled {
@@ -265,7 +265,7 @@
 	}
 
 	.error {
-		color: #8f3d3d;
+		color: var(--rahat-rose, #b87a7a);
 		font-weight: 600;
 	}
 
