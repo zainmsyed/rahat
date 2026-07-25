@@ -6,7 +6,7 @@
 ---
 
 ## What we're building
-Rahat is a greenfield single-user assistant that schedules recurring household tasks around time budgets, calendar constraints, and stated priorities for overwhelmed parents, starting with new mothers and mothers with multiple young children. v1 uses a Go + SQLite backend, Telegram for the interactive daily loop with long polling as the default transport and webhook mode as an optional domain-backed upgrade, read-only Google Calendar integration, and a lightweight SvelteKit web flow for onboarding plus a passive today/tomorrow lookahead page. Email recap delivery is deferred until better auth/OAuth groundwork is in place.
+Rahat is a greenfield single-user assistant that schedules recurring household tasks around time budgets, calendar constraints, and stated priorities for overwhelmed parents, starting with new mothers and mothers with multiple young children. v1 uses a Go + SQLite backend, Telegram for the interactive daily loop with long polling as the default transport and webhook mode as an optional domain-backed upgrade, read-only Google Calendar integration, and lightweight SvelteKit web surfaces for onboarding, authenticated routine maintenance, and a passive today/tomorrow lookahead page. Email recap delivery remains deferred until its delivery and account-recovery path is deliberately replanned.
 
 ## What we're not building (v1 scope)
 - Multi-user household assignment
@@ -14,7 +14,7 @@ Rahat is a greenfield single-user assistant that schedules recurring household t
 - Push notifications or a PWA
 - Calendar write-back
 - Yearly cadence tasks
-- A full interactive dashboard for day-to-day task management
+- A full interactive scheduling dashboard or direct manipulation of generated occurrences
 - Machine-learned personalization beyond the PRD rules
 
 ## Features
@@ -28,10 +28,13 @@ Implement the daily scheduling engine, cadence generation, window budgeting, ove
 Make Telegram the primary interactive surface for daily lists, reminders, check-ins, snoozes, reschedules, and pause actions, with long polling as the default v1 delivery path for easier development and testing. Email overview/recap delivery is deferred until better auth/OAuth groundwork is in place rather than being shipped in the current v1 plan. When deployment settings include a suitable public domain, Telegram webhook mode can be enabled; otherwise the app should continue on long polling. Implemented by Story 004; the original email-digest Story 010 has been retired pending replanning.
 
 ### Feature 4: Minimal web surfaces
-Provide a guided, hand-holding onboarding flow (core, Telegram, and Google Calendar) plus a passive today/tomorrow lookahead page without introducing a full dashboard. Implemented by Stories 006, 007, 008, and 009. The lookahead page implementation is complete; broader rollout is intentionally paused until Rahat has the better auth/OAuth and email delivery path needed for wider user access.
+Provide a guided, hand-holding onboarding flow (core, Telegram, and Google Calendar), a passive today/tomorrow lookahead page, and focused post-onboarding routine maintenance without introducing a full scheduling dashboard. Onboarding and lookahead are implemented by Stories 006–009; durable beta sessions and routine maintenance are planned in Stories 012 and 013.
 
 ### Feature 5: Launch readiness
 Add job wiring, telemetry, backups, and deployment/runbook support so the small testing group can use Rahat consistently over several weeks. Implemented by Story 011.
+
+### Feature 6: Durable beta account access
+Replace temporary onboarding-only identity with revocable browser sessions and single-use operator-issued access links suitable for the small beta group. This creates the authorization boundary required by post-onboarding task management without prematurely adding passwords, social login, or email delivery. Planned in Story 012.
 
 ## Story queue
 | Story | Title | Status | Blocks |
@@ -46,7 +49,9 @@ Add job wiring, telemetry, backups, and deployment/runbook support so the small 
 | 008 | Build the guided Google Calendar connection onboarding | complete | 005, 006 |
 | 009 | Add the read-only today/tomorrow lookahead page | complete | 003, 005, 006 |
 | 010 | Send email overview/recap digests | retired | 003, 006, 009 |
-| 011 | Add ops, telemetry, backups, and launch tooling | not-started | 001–009 |
+| 011 | Add ops, telemetry, backups, and launch tooling | complete | 001–009 |
+| 012 | Establish durable beta web sessions | not-started | 006, 007, 011 |
+| 013 | Add post-onboarding task management | not-started | 003, 006, 009, 012 |
 
 ## Replanning log
 - 2026-07-07: Initial plan created from the PRD plus clarified scope decisions: greenfield repo, Telegram as the interactive loop, email as recap-only, onboarding and read-only web view retained, SMS removed from v1.
@@ -55,3 +60,4 @@ Add job wiring, telemetry, backups, and deployment/runbook support so the small 
 - 2026-07-21: Renumbered the queue so the onboarding sequence takes 006–008 and the remaining stories shift up: 006 guided core onboarding, 007 guided Telegram onboarding, 008 guided Google Calendar onboarding, 009 lookahead page (was 007), 010 email digests (was 008), 011 ops/launch tooling (was 009). The retired original Story 006 is preserved in `.context/stories/archive/story-006.md`. Also decided v1 uses a single shared Telegram bot operated by the project owner: testers never create bots, each tester gets a private 1:1 chat with the shared bot, and per-tester link codes bind each chat to the right profile.
 - 2026-07-25: Marked Stories 001–009 complete in the plan. Story 009’s read-only lookahead page is implemented and closed at the story level, but broader rollout is intentionally paused until better auth/OAuth and email delivery work is in place; that dependency is expected to be addressed by the remaining auth/digest work rather than by reopening Story 009.
 - 2026-07-25: Retired Story 010 without implementation. Email overview/recap digests are intentionally deferred until Rahat has better auth/OAuth groundwork and a clearer delivery/rollout path; if the feature returns, it should be replanned as a new future story rather than resumed from the old scoped digest story.
+- 2026-07-25: Added Stories 012 and 013 after identifying that testers cannot maintain routines once onboarding ends. Story 012 first establishes durable, revocable beta browser sessions and operator-issued single-use access links without depending on deferred email delivery. Story 013 then adds an authenticated, focused task-management page that reuses the onboarding editor and preserves completed history when routines are removed. This remains intentionally smaller than a full scheduling dashboard.
