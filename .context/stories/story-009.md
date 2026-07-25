@@ -57,4 +57,4 @@ The web app now has a passive `/lookahead` page that reads the token from the UR
 
 Coverage includes token issue/verify/expiry/tamper tests, lookahead handler token-access and response tests, scheduler preview read behavior through handler tests, and frontend rendering tests for grouped tasks, blocked windows, omitted items, and absence of edit controls. `go test ./...`, `cd web && npm run check`, and `cd web && npm test` pass.
 
-The feature is implemented and closed at the story level, but rollout is intentionally paused until Rahat has the OAuth/email delivery path you want for broader user access.
+The feature is implemented and this story is closed because the scoped lookahead work is finished. Broader rollout is intentionally paused until Rahat has the better auth/OAuth and email delivery path you want for wider user access.
