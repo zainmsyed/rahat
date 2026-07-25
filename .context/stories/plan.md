@@ -22,7 +22,7 @@ Rahat is a greenfield per-user assistant that schedules recurring household task
 Establish the greenfield repo structure, runtime skeleton, SQLite persistence, and core domain models for users, tasks, subtasks, occurrences, channel preferences, pauses, and event history. Implemented by Stories 001 and 002.
 
 ### Feature 2: Scheduling and calendar-aware task planning
-Implement the daily scheduling engine, cadence generation, window budgeting, overflow behavior, rollover caps, skip semantics, and Google Calendar read-only constraints. Implemented by Stories 003 and 005.
+Implement the daily scheduling engine, cadence generation, window budgeting, overflow behavior, rollover caps, skip semantics, and Google Calendar read-only constraints. Implemented by Stories 003 and 005. Post-launch hardening continues in Stories 016–019 to make the engine fit realistic task combinations, spread recurring tasks across days, respect local timezones, and use calendar context for day selection.
 
 ### Feature 3: Adaptive messaging loop
 Make Telegram the primary interactive surface for daily lists, reminders, check-ins, snoozes, reschedules, pause actions, onboarding confirmation, and self-service return to authenticated web settings. Long polling remains the default v1 delivery path; webhook mode is enabled only when deployment settings clearly support it. Email overview/recap delivery remains deferred. Implemented by Story 004 and extended by Stories 014–015; the original email-digest Story 010 has been retired pending replanning.
@@ -57,6 +57,10 @@ After onboarding persists routines and generates the first schedule, confirm the
 | 013 | Add post-onboarding task management | in-progress | 003, 006, 009, 012 |
 | 014 | Enable self-service web access through Telegram | not-started | 004, 007, 012, 013 |
 | 015 | Confirm onboarding completion in Telegram | not-started | 003, 004, 006, 007, 014 |
+| 016 | Make the daily scheduler fit realistic task combinations | planned | 003 |
+| 017 | Spread recurring tasks across days and weeks | planned | 003, 016 |
+| 018 | Make the scheduler timezone-aware | planned | 003, 017 |
+| 019 | Calendar-aware day selection and load balancing | planned | 005, 017, 018 |
 
 ## Replanning log
 - 2026-07-07: Initial plan created from the PRD plus clarified scope decisions: greenfield repo, Telegram as the interactive loop, email as recap-only, onboarding and read-only web view retained, SMS removed from v1.
@@ -68,3 +72,4 @@ After onboarding persists routines and generates the first schedule, confirm the
 - 2026-07-25: Added Stories 012 and 013 after identifying that testers cannot maintain routines once onboarding ends. Story 012 first establishes durable, revocable beta browser sessions and operator-issued single-use access links without depending on deferred email delivery. Story 013 then adds an authenticated, focused task-management page that reuses the onboarding editor and preserves completed history when routines are removed. This remains intentionally smaller than a full scheduling dashboard.
 - 2026-07-25: Replanned returning-user access after recognizing that operator-issued links do not provide a viable multi-tester recovery flow. Story 014 makes the uniquely linked Telegram chat the trusted self-service entry point: `/edit` resolves the backend user and issues a fresh short-lived, single-use link into the existing durable session system. Permanent invite/access links and frontend-supplied user identity are explicitly rejected.
 - 2026-07-25: Added Story 015 so onboarding has a visible outcome in the primary product channel. Successful completion will send one idempotent Telegram summary based on persisted routines and the actual first schedule, including honest overflow/skipped feedback and the `/edit` return instruction; on-screen completion remains available and Telegram delivery failure must not roll back saved onboarding data.
+- 2026-07-25: Replanned scheduler robustness after end-to-end testing showed the engine piles every newly-due task onto the first day and cascades overflow forward. Added Stories 016–019: 016 fixes the per-window budget split so feasible combinations fit; 017 spreads recurring tasks across days/weeks according to cadence and priority; 018 makes dates and windows timezone-aware; 019 uses calendar blocks to select lighter days and balance load. The scheduler is the core product for new and overwhelmed mothers, so these stories are sequenced to make it genuinely plan around her life.
