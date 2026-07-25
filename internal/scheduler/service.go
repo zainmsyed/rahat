@@ -283,7 +283,7 @@ func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWith
 		if taskDef.Task.IsPaused {
 			continue
 		}
-		if !isDue(taskDef, history, planDate) {
+		if !taskScheduledOnDate(taskDef, history, planDateStr, planDate) {
 			continue
 		}
 
@@ -304,7 +304,7 @@ func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWith
 				Window:     taskDef.Task.TimeOfDayPreference,
 				Duration:   taskDef.Task.DurationMinutes,
 				OverdueAge: 0,
-				SortRank:   priorityRank(taskDef.Task.Priority),
+				SortRank:   taskSortRank(taskDef.Task),
 			}
 			if candidate.Window == tasks.TimeOfDayAny {
 				candidate.Window = tasks.TimeOfDayMorning
@@ -334,21 +334,21 @@ func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWith
 				Window:     subtaskDef.TimeOfDayPreference,
 				Duration:   subtaskDef.DurationMinutes,
 				OverdueAge: 0,
-				SortRank:   priorityRank(taskDef.Task.Priority),
+				SortRank:   taskSortRank(taskDef.Task),
 			}
 			candidates = append(candidates, candidate)
 		}
 	}
 
 	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].Window != candidates[j].Window {
-			return daytime.Order(string(candidates[i].Window)) < daytime.Order(string(candidates[j].Window))
-		}
 		if candidates[i].SortRank != candidates[j].SortRank {
 			return candidates[i].SortRank < candidates[j].SortRank
 		}
 		if candidates[i].OverdueAge != candidates[j].OverdueAge {
 			return candidates[i].OverdueAge > candidates[j].OverdueAge
+		}
+		if candidates[i].Window != candidates[j].Window {
+			return daytime.Order(string(candidates[i].Window)) < daytime.Order(string(candidates[j].Window))
 		}
 		if candidates[i].Subtask != nil && candidates[j].Subtask != nil && candidates[i].Subtask.TaskID == candidates[j].Subtask.TaskID {
 			return candidates[i].Subtask.StepOrder < candidates[j].Subtask.StepOrder
@@ -438,7 +438,7 @@ func candidateFromOccurrence(occ occurrences.Occurrence, taskDef tasks.Task, sub
 	if window == tasks.TimeOfDayAny {
 		window = tasks.TimeOfDayMorning
 	}
-	return scheduledCandidate{Occurrence: occ, Task: taskDef, Subtask: subtaskDef, Window: window, Duration: duration, OverdueAge: overdue, SortRank: priorityRank(taskDef.Priority)}
+	return scheduledCandidate{Occurrence: occ, Task: taskDef, Subtask: subtaskDef, Window: window, Duration: duration, OverdueAge: overdue, SortRank: taskSortRank(taskDef)}
 }
 
 func findDefinition(taskDefs []tasks.TaskWithSubtasks, taskID, subtaskID string) (tasks.Task, *tasks.Subtask, bool) {
@@ -470,50 +470,138 @@ func effectiveWindow(taskDef tasks.Task, subtaskDef *tasks.Subtask) tasks.TimeOf
 	return tasks.TimeOfDayMorning
 }
 
-func isDue(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate time.Time) bool {
+func taskScheduledOnDate(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDateStr string, planDate time.Time) bool {
+	horizonEnd := planDate.AddDate(0, 0, 6)
+	for _, d := range taskScheduleDates(taskDef, history, planDate, horizonEnd) {
+		if d == planDateStr {
+			return true
+		}
+	}
+	return false
+}
+
+// taskScheduleDates returns the dates within [planDate, horizonEnd] on which a
+// recurring task should be considered for scheduling. It spreads count-based
+// and interval-based tasks across the available days instead of treating every
+// day in the window as due.
+func taskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time) []string {
 	switch taskDef.Task.CadenceType {
 	case tasks.CadenceTypeInterval:
-		anchor, ok := latestAnchorDate(taskDef, history)
-		if !ok {
-			return true
-		}
-		return !planDate.Before(anchor.AddDate(0, 0, taskDef.Task.CadenceValue))
+		return intervalTaskScheduleDates(taskDef, history, planDate, horizonEnd)
 	case tasks.CadenceTypeCount:
-		weekStart := startOfWeek(planDate)
-		weekEnd := weekStart.AddDate(0, 0, 7)
-		count := 0
-		var lastAnchor time.Time
-		seenAnchors := map[string]bool{}
-		for _, occurrence := range history {
-			if occurrence.TaskID != taskDef.Task.ID {
-				continue
-			}
-			anchor := resolvedAnchorDate(occurrence)
-			anchorKey := store.FormatDate(anchor)
-			if !anchor.Before(weekStart) && anchor.Before(weekEnd) && !seenAnchors[anchorKey] {
-				seenAnchors[anchorKey] = true
-				count++
-				if anchor.After(lastAnchor) {
-					lastAnchor = anchor
-				}
-			}
-		}
-		if count >= taskDef.Task.CadenceValue {
-			return false
-		}
-		remaining := taskDef.Task.CadenceValue - count
-		daysLeft := int(weekEnd.Sub(planDate).Hours() / 24)
-		if remaining >= daysLeft {
-			return true
-		}
-		if count == 0 {
-			return true
-		}
-		spacing := max(1, 7/taskDef.Task.CadenceValue)
-		return !planDate.Before(lastAnchor.AddDate(0, 0, spacing))
+		return countTaskScheduleDates(taskDef, history, planDate, horizonEnd)
 	default:
-		return false
+		return nil
 	}
+}
+
+func intervalTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time) []string {
+	cadence := taskDef.Task.CadenceValue
+	if cadence <= 0 {
+		cadence = 1
+	}
+
+	var target time.Time
+	if anchor, ok := latestAnchorDate(taskDef, history); ok {
+		target = anchor.AddDate(0, 0, cadence)
+		if target.Before(planDate) {
+			target = planDate
+		}
+	} else {
+		// Brand-new task: spread the first occurrence by task name so different
+		// weekly tasks land on different days instead of piling onto day one.
+		offset := taskNameHash(taskDef.Task.Name) % cadence
+		target = startOfWeek(planDate).AddDate(0, 0, offset)
+		for target.Before(planDate) {
+			target = target.AddDate(0, 0, cadence)
+		}
+	}
+
+	if target.After(horizonEnd) {
+		return nil
+	}
+	return []string{store.FormatDate(target)}
+}
+
+func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time) []string {
+	weekStart := startOfWeek(planDate)
+	weekEnd := weekStart.AddDate(0, 0, 7)
+
+	count := 0
+	var lastAnchor time.Time
+	seenAnchors := map[string]bool{}
+	for _, occurrence := range history {
+		if occurrence.TaskID != taskDef.Task.ID {
+			continue
+		}
+		anchor := resolvedAnchorDate(occurrence)
+		anchorKey := store.FormatDate(anchor)
+		if !anchor.Before(weekStart) && anchor.Before(weekEnd) && !seenAnchors[anchorKey] {
+			seenAnchors[anchorKey] = true
+			count++
+			if anchor.After(lastAnchor) {
+				lastAnchor = anchor
+			}
+		}
+	}
+
+	remaining := taskDef.Task.CadenceValue - count
+	if remaining <= 0 {
+		return nil
+	}
+	spacing := max(1, 7/taskDef.Task.CadenceValue)
+
+	var start time.Time
+	if count == 0 {
+		if len(history) == 0 {
+			// Brand-new count task: stagger first occurrence by name so multiple
+			// 2x/week tasks do not all start on the same day.
+			offset := taskNameHash(taskDef.Task.Name) % spacing
+			start = weekStart.AddDate(0, 0, offset)
+			if start.Before(planDate) {
+				start = planDate
+			}
+		} else {
+			// Existing task with no this-week completions: catch up today.
+			start = planDate
+		}
+	} else {
+		start = lastAnchor.AddDate(0, 0, spacing)
+		if start.Before(planDate) {
+			start = planDate
+		}
+	}
+
+	var dates []string
+	for i := 0; i < remaining; i++ {
+		candidate := start.AddDate(0, 0, i*spacing)
+		if candidate.Before(planDate) {
+			continue
+		}
+		if !candidate.Before(weekEnd) || candidate.After(horizonEnd) {
+			break
+		}
+		dates = append(dates, store.FormatDate(candidate))
+	}
+
+	// Deadline pressure: if we have run out of room in the week/horizon, schedule
+	// today so the cadence commitment is not silently missed.
+	daysLeft := int(weekEnd.Sub(planDate).Hours() / 24)
+	if len(dates) == 0 && remaining >= daysLeft {
+		return []string{store.FormatDate(planDate)}
+	}
+	return dates
+}
+
+func taskNameHash(name string) int {
+	h := 0
+	for i := 0; i < len(name); i++ {
+		h = h*31 + int(name[i])
+	}
+	if h < 0 {
+		h = -h
+	}
+	return h
 }
 
 func latestAnchorDate(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence) (time.Time, bool) {
@@ -932,6 +1020,20 @@ func priorityRank(priority tasks.Priority) int {
 	default:
 		return 2
 	}
+}
+
+func taskSortRank(task tasks.Task) int {
+	return priorityRank(task.Priority)*10 + cadenceUrgencyRank(task)
+}
+
+func cadenceUrgencyRank(task tasks.Task) int {
+	if task.CadenceType == tasks.CadenceTypeInterval && task.CadenceValue <= 1 {
+		return 0
+	}
+	if task.CadenceType == tasks.CadenceTypeCount || (task.CadenceType == tasks.CadenceTypeInterval && task.CadenceValue <= 7) {
+		return 1
+	}
+	return 2
 }
 
 func max(a, b int) int {

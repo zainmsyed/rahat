@@ -510,7 +510,7 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		seed           func(context.Context, *testing.T, *users.Service, *tasks.Service) string
+		seed           func(context.Context, *testing.T, *users.Service, *tasks.Service, *occurrences.Service) string
 		day            time.Time
 		budget         int
 		wantScheduled  int
@@ -520,13 +520,13 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 	}{
 		{
 			name: "laundry and clean kitchen fit in 60 minute day",
-			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service) string {
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service) string {
 				t.Helper()
 				user, err := userService.Create(ctx, users.User{DisplayName: "Laundry + Clean", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Laundry", DurationMinutes: 25, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAny, IsMultistep: true}, []tasks.Subtask{
+				laundry, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Laundry", DurationMinutes: 25, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAny, IsMultistep: true}, []tasks.Subtask{
 					{Name: "Wash", StepOrder: 1, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayMorning},
 					{Name: "Move to dryer", StepOrder: 2, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayAfternoon},
 					{Name: "Fold", StepOrder: 3, DurationMinutes: 15, TimeOfDayPreference: tasks.TimeOfDayEvening},
@@ -538,6 +538,8 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				// Previous-week completion makes laundry due again today.
+				_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: laundry.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-20", OriginalScheduledForDate: "2026-07-20", ScheduledTimeOfDay: tasks.TimeOfDayMorning})
 				return user.ID
 			},
 			day:            time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
@@ -557,16 +559,18 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 		},
 		{
 			name: "grocery run alone fits in 60 minute day",
-			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service) string {
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service) string {
 				t.Helper()
 				user, err := userService.Create(ctx, users.User{DisplayName: "Grocery", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Grocery run", DurationMinutes: 60, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 7, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				grocery, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Grocery run", DurationMinutes: 60, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 7, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
+				// Last grocery run was exactly 7 days ago, so it is due today.
+				_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: grocery.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-21", OriginalScheduledForDate: "2026-07-21", ScheduledTimeOfDay: tasks.TimeOfDayAfternoon})
 				return user.ID
 			},
 			day:            time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
@@ -577,13 +581,13 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 		},
 		{
 			name: "meal prep and clean kitchen honestly overflow when total exceeds budget",
-			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service) string {
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service) string {
 				t.Helper()
 				user, err := userService.Create(ctx, users.User{DisplayName: "Overflow", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Meal prep", DurationMinutes: 45, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				mealPrep, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Meal prep", DurationMinutes: 45, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -591,6 +595,8 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				// Previous-week completion makes meal prep due today.
+				_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: mealPrep.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-20", OriginalScheduledForDate: "2026-07-20", ScheduledTimeOfDay: tasks.TimeOfDayAfternoon})
 				return user.ID
 			},
 			day:            time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
@@ -616,7 +622,7 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 			blockRepo := store.NewCalendarBlockRepository(sqlDB)
 			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
 
-			userID := tt.seed(ctx, t, userService, taskService)
+			userID := tt.seed(ctx, t, userService, taskService, occurrenceService)
 			result, err := svc.PlanDay(ctx, userID, tt.day)
 			if err != nil {
 				t.Fatalf("PlanDay() error = %v", err)
@@ -769,6 +775,131 @@ func TestSchedulerFallbackAndBlockedWindows(t *testing.T) {
 				tt.assert(t, result, names)
 			}
 		})
+	}
+}
+
+func TestSchedulerSpreadsRecurringTasksAcrossWeek(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+
+	userService := users.NewService(users.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+	occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	blockRepo := store.NewCalendarBlockRepository(sqlDB)
+	svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+	user, err := userService.Create(ctx, users.User{DisplayName: "Spread Week", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clean, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Clean kitchen", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayEvening}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grocery, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Grocery run", DurationMinutes: 60, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 7, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mealPrep, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Meal prep", DurationMinutes: 45, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	laundry, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Laundry", DurationMinutes: 25, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAny, IsMultistep: true}, []tasks.Subtask{
+		{Name: "Wash", StepOrder: 1, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayMorning},
+		{Name: "Move to dryer", StepOrder: 2, DurationMinutes: 5, TimeOfDayPreference: tasks.TimeOfDayAfternoon},
+		{Name: "Fold", StepOrder: 3, DurationMinutes: 15, TimeOfDayPreference: tasks.TimeOfDayEvening},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Seed one earlier completion for the 2x/week tasks so the week still needs
+	// one more occurrence of each and the scheduler must place that follow-up later.
+	_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: mealPrep.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-27", OriginalScheduledForDate: "2026-07-27", ScheduledTimeOfDay: tasks.TimeOfDayAfternoon})
+	for _, subtask := range laundry.Subtasks {
+		_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: laundry.Task.ID, SubtaskID: subtask.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-27", OriginalScheduledForDate: "2026-07-27", ScheduledTimeOfDay: subtask.TimeOfDayPreference})
+	}
+	_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: grocery.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-21", OriginalScheduledForDate: "2026-07-21", ScheduledTimeOfDay: tasks.TimeOfDayAfternoon})
+
+	cleanDays := map[string]bool{}
+	laundryDays := map[string]bool{}
+	mealPrepDays := map[string]bool{}
+	groceryDays := map[string]bool{}
+	overflowedTaskIDs := map[string]bool{}
+	totalOverflowed := 0
+
+	for i := 0; i < 6; i++ {
+		day := time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)
+		result, err := svc.PlanDay(ctx, user.ID, day)
+		if err != nil {
+			t.Fatalf("PlanDay(%s) error = %v", day.Format("2006-01-02"), err)
+		}
+		used := 0
+		for _, occ := range result.Scheduled {
+			switch occ.TaskID {
+			case clean.Task.ID:
+				cleanDays[result.Date] = true
+				used += 20
+			case grocery.Task.ID:
+				groceryDays[result.Date] = true
+				used += 60
+			case mealPrep.Task.ID:
+				mealPrepDays[result.Date] = true
+				used += 45
+			case laundry.Task.ID:
+				laundryDays[result.Date] = true
+				if occ.SubtaskID != "" {
+					switch occ.ScheduledTimeOfDay {
+					case tasks.TimeOfDayMorning, tasks.TimeOfDayAfternoon:
+						used += 5
+					case tasks.TimeOfDayEvening:
+						used += 15
+					}
+				}
+			}
+			occ.Status = occurrences.StatusCompleted
+			now := day.Add(12 * time.Hour)
+			occ.CompletedAt = &now
+			if _, err := occurrenceService.Update(ctx, occ); err != nil {
+				t.Fatalf("Update() error = %v", err)
+			}
+		}
+		for _, occ := range result.Overflowed {
+			overflowedTaskIDs[occ.TaskID] = true
+		}
+		if used > 60 {
+			t.Fatalf("day %s scheduled %d minutes, want <= 60", result.Date, used)
+		}
+		totalOverflowed += len(result.Overflowed)
+	}
+
+	if len(cleanDays) != 6 {
+		t.Fatalf("clean kitchen scheduled on %d days, want 6", len(cleanDays))
+	}
+	if len(laundryDays) != 1 {
+		t.Fatalf("laundry scheduled on %d days, want 1 second-weekly occurrence", len(laundryDays))
+	}
+	for day := range laundryDays {
+		if day < "2026-07-30" {
+			t.Fatalf("laundry scheduled too early on %s, want spread after 2026-07-27 completion", day)
+		}
+	}
+	if len(groceryDays) != 0 {
+		t.Fatalf("grocery run scheduled on %d days, want 0 because it cannot fit alongside the daily task", len(groceryDays))
+	}
+	if len(mealPrepDays) > 1 {
+		t.Fatalf("meal prep scheduled on %d days, want at most 1 spread occurrence", len(mealPrepDays))
+	}
+	if !overflowedTaskIDs[grocery.Task.ID] {
+		t.Fatal("expected grocery run to overflow honestly when no day in the horizon has room")
+	}
+	if totalOverflowed == 0 {
+		t.Fatal("expected honest overflow for work that cannot fit anywhere in the horizon")
 	}
 }
 

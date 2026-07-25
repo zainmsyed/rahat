@@ -1,6 +1,6 @@
 # Story 017: Spread recurring tasks across days and weeks
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature  
 **Created:** 2026-07-25  
 **Last accessed:** 2026-07-25  
@@ -41,12 +41,31 @@ The current engine generates all tasks for a day when they are due, tries to fit
 - Story 016
 
 ## Checklist
-- [ ] Document the current "schedule everything due on day 1" behavior with a failing test
-- [ ] Implement distribution of recurring tasks across days/weeks based on cadence and priority
-- [ ] Add tests for daily, 2×/week, and 1×/week tasks with mixed durations
-- [ ] Ensure overflow only occurs when no day in the horizon has room
-- [ ] Verify existing scheduler tests still pass
+- [x] Document the current "schedule everything due on day 1" behavior with a regression test that would have failed before the spread logic
+- [x] Implement distribution of recurring tasks across days/weeks based on cadence and priority
+- [x] Add tests for daily, 2×/week, and 1×/week tasks with mixed durations
+- [x] Ensure overflow only occurs when no day in the horizon has room
+- [x] Verify existing scheduler tests still pass
 
 ## Issues
 
 ## Completion Summary
+
+Implemented recurring-task spreading in `internal/scheduler/service.go` by changing when tasks become schedule candidates:
+
+1. **Horizon-aware target dates**: replaced the old "every due task is due today" check with `taskScheduleDates`, which computes target dates inside a 7-day planning horizon.
+   - Interval tasks now schedule on a specific target date instead of becoming due every day after their interval passes.
+   - Count-based weekly tasks now generate spaced target dates inside the week instead of defaulting to day 1.
+   - Brand-new recurring tasks use a stable task-name hash to stagger their first occurrence so similar weekly chores do not all start on the same day.
+
+2. **Cadence-aware daily prioritization**: added `taskSortRank` so daily work (for example `CadenceTypeInterval` with value `1`) is scheduled before less-frequent recurring work of the same priority. This keeps daily chores like Clean kitchen from being displaced by weekly tasks that can be deferred or honestly overflowed.
+
+3. **Tests**:
+   - Updated `TestSchedulerFitsRealisticCombinations` to force due dates explicitly with seeded history so the Story 016 regressions remain stable under the new spread logic.
+   - Added `TestSchedulerSpreadsRecurringTasksAcrossWeek`, which simulates consecutive `PlanDay` runs across the week and verifies:
+     - daily cleaning is scheduled each day,
+     - a 2×/week laundry follow-up is placed later in the week instead of every day,
+     - 1×/week grocery honestly overflows when it cannot fit anywhere alongside daily cleaning,
+     - no day exceeds the 60-minute budget.
+
+All scheduler tests, `go test ./...`, and `npm test` pass. No migrations were needed.
