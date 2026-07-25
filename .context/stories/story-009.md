@@ -38,6 +38,7 @@ A tester can open a tokenized link on mobile and read the current today and tomo
 - [x] Add a simple token-link mechanism for read-only schedule access
 - [x] Build mobile-friendly today and tomorrow schedule views grouped by morning, afternoon, and evening
 - [x] Keep required multistep task chains together so later steps do not appear without earlier steps
+- [x] Support hidden soft-follow-up subtask metadata so cleanup steps can defer without blocking required chains
 - [x] Show blocked windows and conservative calendar explanations when tasks are omitted or limited
 - [x] Remove edit controls so the page stays passive and low-maintenance
 - [x] Cover token access rules and rendered schedule states with tests or smoke checks
