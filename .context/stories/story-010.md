@@ -1,10 +1,10 @@
 # Story 010: Send email overview and recap digests
 
-**Status:** not-started  
+**Status:** retired  
 **Type:** integration  
 **Created:** 2026-07-07  
-**Last accessed:** 2026-07-07  
-**Completed:** —
+**Last accessed:** 2026-07-25  
+**Completed:** 2026-07-25
 
 ---
 
@@ -48,3 +48,5 @@ A tester with email enabled receives a readable overview or recap that matches t
 ---
 
 ## Completion Summary
+
+Story 010 is being closed without implementation because the team is intentionally pausing email overview/recap work until Rahat has the better auth/OAuth and delivery foundation needed for safe broader rollout. The lookahead page from Story 009 is implemented, but email digests are deferred rather than shipped now. If email returns later, it should come back as a replanned future story built on top of the auth work rather than by reviving this original scoped story.
