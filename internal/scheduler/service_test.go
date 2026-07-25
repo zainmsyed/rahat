@@ -637,6 +637,141 @@ func TestSchedulerFitsRealisticCombinations(t *testing.T) {
 	}
 }
 
+func TestSchedulerFallbackAndBlockedWindows(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		seed           func(context.Context, *testing.T, *users.Service, *tasks.Service, *store.CalendarBlockRepository) (string, map[string]string)
+		day            time.Time
+		budget         int
+		wantScheduled  int
+		wantOverflowed int
+		wantSkipped    int
+		assert         func(*testing.T, scheduler.PlanResult, map[string]string)
+	}{
+		{
+			name: "evening task falls back to afternoon when evening is blocked and budget allows",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, blockRepo *store.CalendarBlockRepository) (string, map[string]string) {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Fallback", Timezone: "UTC", DailyTimeBudgetMinutes: 90})
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids := map[string]string{}
+				def, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Morning routine", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids[def.Task.ID] = def.Task.Name
+				def, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Afternoon admin", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids[def.Task.ID] = def.Task.Name
+				def, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Evening wind-down", DurationMinutes: 20, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayEvening}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids[def.Task.ID] = def.Task.Name
+				if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-08-01", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-fb", LocalDate: "2026-08-01", Timezone: "UTC", Title: "Dinner", Classification: "large", Window: "evening"}}); err != nil {
+					t.Fatal(err)
+				}
+				return user.ID, ids
+			},
+			day:            time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+			budget:         90,
+			wantScheduled:  3,
+			wantOverflowed: 0,
+			wantSkipped:    0,
+			assert: func(t *testing.T, result scheduler.PlanResult, names map[string]string) {
+				var eveningTaskWindow string
+				for _, occ := range result.Scheduled {
+					if names[occ.TaskID] == "Evening wind-down" {
+						eveningTaskWindow = string(occ.ScheduledTimeOfDay)
+					}
+				}
+				if eveningTaskWindow != "afternoon" {
+					t.Fatalf("Evening wind-down should fall back to afternoon, got %s", eveningTaskWindow)
+				}
+			},
+		},
+		{
+			name: "demand-aware budget with blocked window honestly overflows what cannot fit",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, blockRepo *store.CalendarBlockRepository) (string, map[string]string) {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Blocked", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids := map[string]string{}
+				def, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Morning routine", DurationMinutes: 30, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids[def.Task.ID] = def.Task.Name
+				def, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Afternoon admin", DurationMinutes: 30, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids[def.Task.ID] = def.Task.Name
+				if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-08-02", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-blk", LocalDate: "2026-08-02", Timezone: "UTC", Title: "Pediatrician", Classification: "medium", Window: "afternoon"}}); err != nil {
+					t.Fatal(err)
+				}
+				return user.ID, ids
+			},
+			day:            time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
+			budget:         60,
+			wantScheduled:  1,
+			wantOverflowed: 1,
+			wantSkipped:    0,
+			assert: func(t *testing.T, result scheduler.PlanResult, names map[string]string) {
+				if len(result.Scheduled) != 1 || names[result.Scheduled[0].TaskID] != "Morning routine" {
+					t.Fatalf("expected Morning routine scheduled, got %+v", result.Scheduled)
+				}
+				if len(result.Overflowed) != 1 || names[result.Overflowed[0].TaskID] != "Afternoon admin" {
+					t.Fatalf("expected Afternoon admin overflowed, got %+v", result.Overflowed)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			sqlDB := openTestDB(t)
+			if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+				t.Fatalf("ApplyMigrations() error = %v", err)
+			}
+
+			userService := users.NewService(users.NewRepository(sqlDB))
+			taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+			occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+			checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+			blockRepo := store.NewCalendarBlockRepository(sqlDB)
+			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+			userID, names := tt.seed(ctx, t, userService, taskService, blockRepo)
+			result, err := svc.PlanDay(ctx, userID, tt.day)
+			if err != nil {
+				t.Fatalf("PlanDay() error = %v", err)
+			}
+			if len(result.Scheduled) != tt.wantScheduled {
+				t.Fatalf("len(Scheduled) = %d, want %d", len(result.Scheduled), tt.wantScheduled)
+			}
+			if len(result.Overflowed) != tt.wantOverflowed {
+				t.Fatalf("len(Overflowed) = %d, want %d", len(result.Overflowed), tt.wantOverflowed)
+			}
+			if len(result.Skipped) != tt.wantSkipped {
+				t.Fatalf("len(Skipped) = %d, want %d", len(result.Skipped), tt.wantSkipped)
+			}
+			if tt.assert != nil {
+				tt.assert(t, result, names)
+			}
+		})
+	}
+}
+
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB, err := db.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "rahat.sqlite3"))

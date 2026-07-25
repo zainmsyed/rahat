@@ -770,25 +770,24 @@ func tryFitCandidate(candidate scheduledCandidate, used, stepWindows map[string]
 }
 
 func fallbackWindows(preferred string) []string {
-	order := []string{"morning", "afternoon", "evening"}
-	result := make([]string, 0, len(order))
-	if preferred != "" {
-		result = append(result, preferred)
+	switch preferred {
+	case "morning":
+		return []string{"morning", "afternoon", "evening"}
+	case "afternoon":
+		return []string{"afternoon", "evening", "morning"}
+	case "evening":
+		return []string{"evening", "afternoon", "morning"}
+	default:
+		return []string{"morning", "afternoon", "evening"}
 	}
-	for _, window := range order {
-		if window != preferred {
-			result = append(result, window)
-		}
-	}
-	return result
 }
 
-func tryFitInWindow(candidate scheduledCandidate, window string, used, stepWindows map[string]int, stepReadyAt map[string]time.Time, budgets map[string]int, planDate time.Time, constraints calendarConstraints) (scheduledCandidate, bool) {
+func candidateReadyInWindow(candidate scheduledCandidate, window string, stepWindows map[string]int, stepReadyAt map[string]time.Time, planDate time.Time) (time.Time, bool) {
 	// Subtask chains cannot move to a window earlier than a previously scheduled step.
 	if candidate.Subtask != nil {
 		if prevOrder, ok := stepWindows[candidate.Task.ID]; ok {
 			if daytime.Order(window) < prevOrder {
-				return candidate, false
+				return time.Time{}, false
 			}
 		}
 	}
@@ -802,11 +801,19 @@ func tryFitInWindow(candidate scheduledCandidate, window string, used, stepWindo
 			}
 			// If the required gap pushes the step out of this window, the window cannot hold it.
 			if shiftedWindow, ok := daytime.WindowForTime(planDate, readyAt); !ok || shiftedWindow != window {
-				return candidate, false
+				return time.Time{}, false
 			}
 		}
 	}
 
+	return readyAt, true
+}
+
+func tryFitInWindow(candidate scheduledCandidate, window string, used, stepWindows map[string]int, stepReadyAt map[string]time.Time, budgets map[string]int, planDate time.Time, constraints calendarConstraints) (scheduledCandidate, bool) {
+	readyAt, ok := candidateReadyInWindow(candidate, window, stepWindows, stepReadyAt, planDate)
+	if !ok {
+		return candidate, false
+	}
 	if constraints.SmallTaskOnlyReason != "" && candidate.Duration > 15 {
 		return candidate, false
 	}
@@ -831,39 +838,13 @@ func prepareCandidate(candidate scheduledCandidate, stepWindows map[string]int, 
 	}
 	candidate.Window = tasks.TimeOfDayPreference(window)
 
-	readyAt := daytime.StartTime(planDate, window)
-	if candidate.Subtask != nil {
-		prevWindow, ok := stepWindows[candidate.Task.ID]
-		currentWindow := daytime.Order(window)
-		if candidate.Subtask.StepOrder > 1 && ok && currentWindow < prevWindow {
-			currentWindow = prevWindow
-			switch currentWindow {
-			case 0:
-				window = "morning"
-			case 1:
-				window = "afternoon"
-			default:
-				window = "evening"
-			}
-			candidate.Window = tasks.TimeOfDayPreference(window)
-			readyAt = daytime.StartTime(planDate, window)
-		}
-		if prevReady, ok := stepReadyAt[candidate.Task.ID]; ok {
-			minReady := prevReady.Add(time.Duration(candidate.Subtask.GapRule.MinGapAfterPreviousMinutes) * time.Minute)
-			if minReady.After(readyAt) {
-				readyAt = minReady
-			}
-			if shiftedWindow, ok := daytime.WindowForTime(planDate, readyAt); ok {
-				window = shiftedWindow
-				candidate.Window = tasks.TimeOfDayPreference(window)
-			} else {
-				window = "evening"
-				candidate.Window = tasks.TimeOfDayPreference(window)
-				readyAt = daytime.EndTime(planDate, window)
-			}
-		}
+	if readyAt, ok := candidateReadyInWindow(candidate, window, stepWindows, stepReadyAt, planDate); ok {
+		candidate.Occurrence.ReadyAt = &readyAt
+	} else {
+		// Keep a sensible default for callers; the actual placement will recompute.
+		readyAt := daytime.StartTime(planDate, window)
+		candidate.Occurrence.ReadyAt = &readyAt
 	}
-	candidate.Occurrence.ReadyAt = &readyAt
 	return candidate
 }
 
