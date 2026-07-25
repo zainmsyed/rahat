@@ -38,6 +38,6 @@ describe('LoginPage', () => {
 		render(LoginPage);
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(exchangeAccessLink).toHaveBeenCalledWith('demo-token');
-		expect(mockGoto).toHaveBeenCalledWith('/');
+		expect(mockGoto).toHaveBeenCalledWith('/tasks');
 	});
 });

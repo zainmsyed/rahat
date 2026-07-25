@@ -55,6 +55,27 @@ func TestIssueExchangeVerifyAndRevoke(t *testing.T) {
 	}
 }
 
+func TestTelegramAccessGrantExpiresAfterFifteenMinutes(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	if _, err := svc.db.ExecContext(ctx, `INSERT INTO users (id, display_name, timezone, daily_time_budget_minutes, created_at, updated_at) VALUES ('u1', 'Tester', 'UTC', 30, '2026-07-25T12:00:00Z', '2026-07-25T12:00:00Z')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return now }
+	grant, _, err := svc.IssueAccessGrant(ctx, "u1", 15*time.Minute)
+	if err != nil {
+		t.Fatalf("IssueAccessGrant() error = %v", err)
+	}
+	if !grant.ExpiresAt.Equal(now.Add(15 * time.Minute)) {
+		t.Fatalf("expires_at = %v, want %v", grant.ExpiresAt, now.Add(15*time.Minute))
+	}
+	svc.now = func() time.Time { return now.Add(16 * time.Minute) }
+	if _, _, err := svc.ExchangeAccessGrant(ctx, ""); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("expected ErrInvalidToken for empty token, got %v", err)
+	}
+}
+
 func TestExpiredAccessGrantRejected(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()

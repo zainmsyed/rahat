@@ -125,7 +125,9 @@ func main() {
 		}
 		telegramService = ntg.NewService(bot, userService, taskService, occurrenceService, eventService)
 		checkinService := checkins.NewService(bot, userService, taskService, occurrenceService, eventService, prefService)
-		transport := configureTelegramTransport(ctx, logger, mux, bot, webhookSecret, webhookURL, checkinService, onboardingService)
+		editHandler := ntg.NewEditCommandHandler(authService, userService, bot, cfg.WebOrigin, logger)
+		messageRouter := &telegramMessageRouter{onboarding: onboardingService, edit: editHandler}
+		transport := configureTelegramTransport(ctx, logger, mux, bot, webhookSecret, webhookURL, checkinService, messageRouter)
 		logger.Info("telegram bot enabled", "transport", transport)
 
 		mux.HandleFunc("POST /telegram/send/daily", func(w http.ResponseWriter, r *http.Request) {

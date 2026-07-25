@@ -95,6 +95,32 @@ func TestWebhookRoutesMessage(t *testing.T) {
 	}
 }
 
+func TestWebhookRoutesEditMessage(t *testing.T) {
+	callback := &fakeCallbackHandler{}
+	message := &fakeMessageHandler{}
+	handler := NewHandler("", callback, message)
+
+	update := ntg.Update{UpdateID: 4, Message: &ntg.Message{Chat: &ntg.Chat{ID: 123, Type: "private"}, Text: "/edit"}}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/telegram", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if len(message.messages) != 1 {
+		t.Fatalf("message calls = %d, want 1", len(message.messages))
+	}
+	if message.messages[0].Text != "/edit" {
+		t.Fatalf("message text = %q, want /edit", message.messages[0].Text)
+	}
+	if len(callback.calls) != 0 {
+		t.Fatalf("unexpected callback calls: %+v", callback.calls)
+	}
+}
+
 func TestWebhookReturnsBadRequestWhenCallbackHandlerErrors(t *testing.T) {
 	message := &fakeMessageHandler{}
 	callbackErr := errors.New("callback failed")

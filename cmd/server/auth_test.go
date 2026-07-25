@@ -188,6 +188,47 @@ func TestProtectedRouteUsesAuthenticatedUserNotRawUserID(t *testing.T) {
 	}
 }
 
+func TestExchangeAccessLinkAlwaysCreatesSessionForGrantUser(t *testing.T) {
+	h, authService, userService := newTestAuthHandler(t)
+	userOne, err := userService.Create(context.Background(), usr.User{DisplayName: "One", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+	if err != nil {
+		t.Fatalf("Create() user one error = %v", err)
+	}
+	userTwo, err := userService.Create(context.Background(), usr.User{DisplayName: "Two", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+	if err != nil {
+		t.Fatalf("Create() user two error = %v", err)
+	}
+	_, userTwoSession, err := authService.CreateSessionForUser(context.Background(), userTwo.ID)
+	if err != nil {
+		t.Fatalf("CreateSessionForUser() error = %v", err)
+	}
+	_, grantToken, err := authService.IssueAccessGrant(context.Background(), userOne.ID, time.Hour)
+	if err != nil {
+		t.Fatalf("IssueAccessGrant() error = %v", err)
+	}
+
+	mux := http.NewServeMux()
+	h.register(mux)
+	body, _ := json.Marshal(authExchangeRequest{Token: grantToken})
+	req := httptest.NewRequest(http.MethodPost, "/auth/access-link/exchange", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://localhost:5200")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: userTwoSession})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("exchange status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var resp sessionResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode session response: %v", err)
+	}
+	if !resp.Authenticated || resp.User == nil || resp.User.ID != userOne.ID {
+		t.Fatalf("expected session for grant user %q, got %+v", userOne.ID, resp)
+	}
+}
+
 func TestProductionCookieUsesSecureFlag(t *testing.T) {
 	h := &authHandler{appEnv: "production"}
 	rec := httptest.NewRecorder()

@@ -50,6 +50,20 @@ func (f *fakeCallbackHandler) HandleCallback(_ context.Context, data string) err
 	return nil
 }
 
+type fakeMessageHandler struct {
+	messages []*Message
+	done     chan struct{}
+}
+
+func (f *fakeMessageHandler) HandleMessage(_ context.Context, msg *Message) error {
+	f.messages = append(f.messages, msg)
+	if f.done != nil {
+		close(f.done)
+		f.done = nil
+	}
+	return nil
+}
+
 func TestPollerProcessesCallbackQuery(t *testing.T) {
 	client := &fakeRuntimeClient{updates: []Update{{UpdateID: 42, CallbackQuery: &CallbackQuery{Data: "d:occ-1"}}}}
 	handler := &fakeCallbackHandler{done: make(chan struct{})}
@@ -71,5 +85,26 @@ func TestPollerProcessesCallbackQuery(t *testing.T) {
 	}
 	if client.updatesCalls == 0 {
 		t.Fatal("expected getUpdates to be called")
+	}
+}
+
+func TestPollerProcessesEditMessage(t *testing.T) {
+	client := &fakeRuntimeClient{updates: []Update{{UpdateID: 7, Message: &Message{Text: "/edit", Chat: &Chat{ID: 42, Type: "private"}}}}}
+	handler := &fakeMessageHandler{done: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	poller := NewPoller(client, nil, handler, slog.Default())
+	go poller.Run(ctx)
+
+	select {
+	case <-handler.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("poller did not deliver message update")
+	}
+	cancel()
+
+	if len(handler.messages) != 1 || handler.messages[0].Text != "/edit" {
+		t.Fatalf("message calls = %#v, want [/edit]", handler.messages)
 	}
 }

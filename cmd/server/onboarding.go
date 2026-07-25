@@ -560,13 +560,17 @@ func (h *onboardingHandler) HandleMessage(ctx context.Context, msg *ntg.Message)
 		return nil
 	}
 
-	user, err := h.users.GetByID(ctx, session.UserID)
+	user, err := h.users.LinkTelegramChat(ctx, session.UserID, chatID)
 	if err != nil {
-		return err
-	}
-
-	user.TelegramChatID = chatID
-	if _, err := h.users.Update(ctx, user); err != nil {
+		if errors.Is(err, usr.ErrTelegramChatLinked) {
+			if h.bot != nil {
+				_ = h.bot.SendMessage(ctx, ntg.SendMessageRequest{
+					ChatID: chatID,
+					Text:   "This Telegram account is already linked to a different Rahat profile. If you need to move it, contact the operator.",
+				})
+			}
+			return nil
+		}
 		return err
 	}
 	if h.prefs != nil {

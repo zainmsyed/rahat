@@ -15,7 +15,7 @@
 			exchanging = true;
 			try {
 				session = await exchangeAccessLink(token);
-				await goto('/');
+				await goto('/tasks');
 				return;
 			} catch (error) {
 				pageError = error instanceof Error ? error.message : 'Could not use that access link.';
@@ -60,7 +60,7 @@
 			<p><strong>{session.user?.display_name}</strong> is signed in on this browser.</p>
 			<p>This beta currently uses operator-issued access links rather than passwords.</p>
 			<div class="actions">
-				<a href="/">Continue</a>
+				<a href="/tasks">Continue</a>
 				<button type="button" class="ghost" on:click={signOut} disabled={loggingOut}>
 					{loggingOut ? 'Signing out…' : 'Sign out'}
 				</button>

@@ -128,7 +128,19 @@ Story 012 adds durable beta browser sessions backed by secure HttpOnly cookies r
 - Finishing onboarding creates a web session on that browser.
 - A signed-out tester can regain access through an operator-issued one-time link that opens `/login?token=...`.
 - Generate a recovery link with `bash scripts/issue-beta-access.sh <user-id-or-email>`.
+- Testers whose Telegram chat is already linked can also send `/edit` to the bot to receive a private, single-use link that signs them into `/tasks`. Links expire in 15 minutes and cannot be replayed or forwarded after use.
 - In production, set `WEB_SESSION_SECRET` to a strong random secret and serve the frontend from the configured `WEB_ORIGIN` so cookie origin checks succeed.
+- Each non-empty Telegram `chat_id` can belong to only one Rahat user. If onboarding detects a conflict, the tester is asked to contact the operator.
+
+### Self-service return via Telegram
+
+Linked testers can message `/edit` to the bot at any time to request a fresh sign-in link:
+
+- The link is bound server-side to the Rahat user linked to that Telegram chat.
+- It expires in 15 minutes and can only be exchanged once; replays are rejected.
+- The reply includes a single inline button labelled **Manage my routines**; forwarding the link after use does not grant access to a second session.
+- A valid browser session remains usable until it expires or is signed out, so testers with a session can simply reopen the app without requesting another link.
+- If a tester loses their session (new device, cleared cookies, etc.), they can send `/edit` again or ask the operator for a recovery link.
 
 ### 5. Run the local verification target
 

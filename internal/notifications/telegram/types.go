@@ -17,6 +17,7 @@ type ReplyMarkup struct {
 type InlineButton struct {
 	Text         string `json:"text"`
 	CallbackData string `json:"callback_data,omitempty"`
+	URL          string `json:"url,omitempty"`
 }
 
 type Update struct {
