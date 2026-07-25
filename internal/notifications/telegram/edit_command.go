@@ -54,16 +54,19 @@ func (h *EditCommandHandler) HandleMessage(ctx context.Context, msg *Message) er
 	user, err := h.users.GetByTelegramChatID(ctx, chatID)
 	if err != nil {
 		if errors.Is(err, users.ErrNotFound) {
-			return h.reply(ctx, chatID, "We don't recognize this Telegram chat. If you've already connected Telegram during onboarding, make sure you're messaging from the same account. Otherwise, finish onboarding first.")
+			h.sendReply(ctx, chatID, "We don't recognize this Telegram chat. If you've already connected Telegram during onboarding, make sure you're messaging from the same account. Otherwise, finish onboarding first.")
+			return nil
 		}
 		h.logger.Warn("edit command: failed to resolve user by chat", "chat_id", chatID, "error", err)
-		return h.reply(ctx, chatID, "We couldn't look up your account right now. Please try again later.")
+		h.sendReply(ctx, chatID, "We couldn't look up your account right now. Please try again later.")
+		return nil
 	}
 
 	grant, rawToken, err := h.auth.IssueAccessGrant(ctx, user.ID, DefaultTelegramAccessGrantTTL)
 	if err != nil {
 		h.logger.Warn("edit command: failed to issue access grant", "user_id", user.ID, "chat_id", chatID, "error", err)
-		return h.reply(ctx, chatID, "We couldn't create a sign-in link right now. Please try again later.")
+		h.sendReply(ctx, chatID, "We couldn't create a sign-in link right now. Please try again later.")
+		return nil
 	}
 
 	link := h.buildLink(rawToken)
@@ -78,23 +81,44 @@ func (h *EditCommandHandler) HandleMessage(ctx context.Context, msg *Message) er
 		}}},
 	}
 
-	if err := h.bot.SendMessage(ctx, SendMessageRequest{ChatID: chatID, Text: text, ReplyMarkup: markup}); err != nil {
-		h.logger.Warn("edit command: failed to send reply", "user_id", user.ID, "chat_id", chatID, "error", err)
-		return err
+	if err := h.bot.SendMessage(ctx, SendMessageRequest{ChatID: chatID, Text: text, ReplyMarkup: markup}); err == nil {
+		h.logger.Info(
+			"telegram edit link issued",
+			"user_id", user.ID,
+			"chat_id", chatID,
+			"grant_selector", grant.Selector,
+			"expires_at", grant.ExpiresAt.Format(time.RFC3339),
+		)
+		return nil
 	}
 
-	h.logger.Info(
-		"telegram edit link issued",
+	// If the inline-button message fails (e.g. Telegram rejects a localhost URL in dev),
+	// fall back to a plain-text reply so the user still receives the link. Do not propagate
+	// the error, because Telegram will retry the update and we have already issued the grant.
+	h.logger.Warn(
+		"edit command: inline-button reply failed, falling back to plain text",
 		"user_id", user.ID,
 		"chat_id", chatID,
 		"grant_selector", grant.Selector,
-		"expires_at", grant.ExpiresAt.Format(time.RFC3339),
+		"error", err,
 	)
+	fallback := fmt.Sprintf(
+		"Here is your private link to manage your routines. It expires in %d minutes and can only be used once. Do not forward it.\n\n%s",
+		int(DefaultTelegramAccessGrantTTL.Minutes()),
+		link,
+	)
+	if fallbackErr := h.sendReply(ctx, chatID, fallback); fallbackErr != nil {
+		h.logger.Warn("edit command: plain-text fallback also failed", "user_id", user.ID, "chat_id", chatID, "error", fallbackErr)
+	}
 	return nil
 }
 
-func (h *EditCommandHandler) reply(ctx context.Context, chatID, text string) error {
-	return h.bot.SendMessage(ctx, SendMessageRequest{ChatID: chatID, Text: text})
+func (h *EditCommandHandler) sendReply(ctx context.Context, chatID, text string) error {
+	if err := h.bot.SendMessage(ctx, SendMessageRequest{ChatID: chatID, Text: text}); err != nil {
+		h.logger.Warn("edit command: failed to send reply", "chat_id", chatID, "error", err)
+		return err
+	}
+	return nil
 }
 
 func (h *EditCommandHandler) buildLink(rawToken string) string {
