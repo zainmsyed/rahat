@@ -1,0 +1,17 @@
+{
+  "note": "Two reusable rule candidates came out of the story-028 review findings; no fallow or complaint signal was present.",
+  "candidates": [
+    {
+      "text": "When overriding styles of a shared component from a parent, match the component's scoped class selectors rather than bare element selectors so the override survives the component's own hover and state styles.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "The Remove button's rose color in TaskGroup was overridden by Button's text-variant hover because the global override targeted `button` while Button used `.btn-text:hover`. Targeting `.btn-text` preserved the override."
+    },
+    {
+      "text": "Test component events through the public Svelte API (e.g., a wrapper component) instead of relying on implementation-specific DOM event side effects.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "Toggle originally dispatched a native DOM CustomEvent solely so the test could use addEventListener. Using a ToggleTestWrapper to wire `on:change` removed that coupling and let the DOM-event branch be deleted."
+    }
+  ]
+}

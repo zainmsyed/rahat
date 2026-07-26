@@ -1,11 +1,11 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import Toggle from './Toggle.svelte';
+import ToggleTestWrapper from './ToggleTestWrapper.svelte';
 
 describe('Toggle', () => {
 	it('renders unchecked by default', () => {
-		render(Toggle, { props: { id: 'pause', label: 'Active' } });
+		render(ToggleTestWrapper, { props: { id: 'pause', label: 'Active' } });
 
 		const switchEl = screen.getByRole('switch');
 		expect(switchEl).toHaveAttribute('aria-checked', 'false');
@@ -13,17 +13,16 @@ describe('Toggle', () => {
 	});
 
 	it('renders checked when the prop is set', () => {
-		render(Toggle, { props: { id: 'pause', checked: true } });
+		render(ToggleTestWrapper, { props: { id: 'pause', checked: true } });
 
 		expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
 	});
 
 	it('toggles state and dispatches a change event on click', async () => {
-		render(Toggle, { props: { id: 'pause' } });
 		const handler = vi.fn();
-		const switchEl = screen.getByRole('switch');
-		switchEl.addEventListener('change', handler);
+		render(ToggleTestWrapper, { props: { id: 'pause', onChange: handler } });
 
+		const switchEl = screen.getByRole('switch');
 		await fireEvent.click(switchEl);
 
 		expect(switchEl).toHaveAttribute('aria-checked', 'true');

@@ -10,8 +10,6 @@
 	function toggle() {
 		checked = !checked;
 		dispatch('change', { checked });
-		const button = document.getElementById(id);
-		button?.dispatchEvent(new CustomEvent('change', { detail: { checked }, bubbles: true }));
 	}
 </script>
 

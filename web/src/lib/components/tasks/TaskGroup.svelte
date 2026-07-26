@@ -193,12 +193,12 @@
 		gap: var(--space-2);
 	}
 
-	.danger-action :global(button) {
+	.danger-action :global(.btn-text) {
 		color: var(--rose);
-		--underline-color: var(--rose-soft);
+		text-decoration-color: var(--rose-soft);
 	}
 
-	.danger-action :global(button:hover:not(:disabled)) {
+	.danger-action :global(.btn-text:hover:not(:disabled)) {
 		color: #9e5e5e;
 	}
 
