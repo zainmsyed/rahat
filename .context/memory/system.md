@@ -36,8 +36,8 @@
 - Protected endpoints must derive user ownership from the authenticated session or verified initiation state, not from raw user_id request parameters. <!-- source: story-012 --> <!-- confidence: low — no signal in last 5 stories -->
 - Never destructively replace child records referenced by historical data; preserve stable IDs or version/archive the records, and test history retention through edits. <!-- source: story-013 --> <!-- confidence: low — no signal in last 5 stories -->
 - Every state-changing endpoint authenticated by a browser cookie must enforce the shared trusted-origin or CSRF policy and test trusted, missing, and mismatched origins. <!-- source: story-013 --> <!-- confidence: low — no signal in last 5 stories -->
-- When an HTTP response selects Access-Control-Allow-Origin based on the request Origin, always include a Vary: Origin header. <!-- source: story-014 --> <!-- confidence: high -->
-- Do not rely solely on OS network-interface enumeration to build URLs that end users will open; always provide an explicit configuration override and use enumeration only as a fallback. <!-- source: story-014 --> <!-- confidence: high -->
+- When an HTTP response selects Access-Control-Allow-Origin based on the request Origin, always include a Vary: Origin header. <!-- source: story-014 --> <!-- confidence: low — no signal in last 5 stories -->
+- Do not rely solely on OS network-interface enumeration to build URLs that end users will open; always provide an explicit configuration override and use enumeration only as a fallback. <!-- source: story-014 --> <!-- confidence: low — no signal in last 5 stories -->
 - When displaying a persisted local calendar date to a user, parse the canonical date string in the target timezone rather than formatting a UTC-midnight instant. <!-- source: story-015 --> <!-- confidence: high -->
 - Derive post-action status from the action response, not from stale client state captured before the action. <!-- source: story-015 --> <!-- confidence: high -->
 ### From successes
@@ -47,3 +47,5 @@
 - When scheduling recurring work of the same priority, prefer more-frequent tasks (e.g., daily) over less-frequent tasks (e.g., weekly) so daily commitments are protected and less-frequent tasks only claim leftover budget or honestly overflow. <!-- source: story-017 --> <!-- confidence: high -->
 - Schedule date, time-window, and ready-time calculations must be anchored in the user's local timezone; resolve a local-midnight time in the user's location before computing window boundaries or plan dates. <!-- source: story-018 --> <!-- confidence: high -->
 - When an endpoint accepts an optional local date, default to the current local date in the user's timezone rather than UTC now. <!-- source: story-018 --> <!-- confidence: high -->
+- When a scheduler selects days for recurring tasks using calendar load, keep tasks on their natural cadence dates when availability is tied; only move them to another day when that day has strictly more available budget or the default day is blocked. <!-- source: story-019 --> <!-- confidence: high -->
+- When a feature adds user-facing explanatory data, include an automated test that demonstrates the data reaches the response or UI contract. <!-- source: story-019 --> <!-- confidence: high -->
