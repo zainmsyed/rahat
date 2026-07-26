@@ -1,0 +1,17 @@
+{
+  "note": "",
+  "candidates": [
+    {
+      "text": "Distinguish initial-load state from action-in-progress state so that submitting a form does not replace the form with a loading spinner or otherwise destabilize the user's context.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "The story-022 review found the invite-code page reused `loading` for both the initial mount and the form submission. Pressing Start onboarding would hide the form, which is confusing. A dedicated `submitting` flag keeps the form visible and only disables the button during the request."
+    },
+    {
+      "text": "When a UI story redesigns a page, add or update a page-level test that exercises the primary interactive path and its validation or error state.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "The existing onboarding page test only covered the automatic invite-from-URL path. After the redesign, the new form markup, error banner, and empty-code validation had no automated coverage, so regressions could slip through."
+    }
+  ]
+}
