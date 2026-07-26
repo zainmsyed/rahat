@@ -120,11 +120,6 @@
 		}
 	}
 
-	function openTelegram() {
-		if (status.deep_link) {
-			window.open(status.deep_link, '_blank', 'noopener,noreferrer');
-		}
-	}
 </script>
 
 {#if loading}
@@ -173,7 +168,9 @@
 					name="Telegram"
 					subtitle="Interactive reminders and check-ins"
 					connected={false}
-					on:click={openTelegram}
+					href={status.deep_link}
+					target="_blank"
+					rel="noopener noreferrer"
 				/>
 
 				<InfoBox title="How to connect">

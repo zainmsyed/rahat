@@ -11,54 +11,34 @@
 
 	const dispatch = createEventDispatcher<{ click: void }>();
 
+	$: tag = href ? 'a' : 'button';
+	$: linkProps = href ? { href, target, rel } : {};
+	$: buttonProps = href ? {} : { type: 'button' };
 	$: statusText = connected ? 'Connected' : 'Not connected';
 </script>
 
-{#if href}
-	<a
-		class="connect-tile"
-		class:connected
-		{href}
-		{target}
-		{rel}
-		on:click={() => dispatch('click')}
-	>
-		{#if icon}
-			<div class="connect-icon">{icon}</div>
+<svelte:element
+	this={tag}
+	class="connect-tile"
+	class:connected
+	{...linkProps}
+	{...buttonProps}
+	on:click={() => dispatch('click')}
+>
+	{#if icon}
+		<div class="connect-icon">{icon}</div>
+	{/if}
+	<div class="connect-body">
+		<div class="connect-name">{name}</div>
+		{#if subtitle}
+			<div class="connect-sub">{subtitle}</div>
 		{/if}
-		<div class="connect-body">
-			<div class="connect-name">{name}</div>
-			{#if subtitle}
-				<div class="connect-sub">{subtitle}</div>
-			{/if}
-			<div class="connect-status">
-				<span class="status-dot" class:connected></span>
-				<span class="status-text">{statusText}</span>
-			</div>
+		<div class="connect-status">
+			<span class="status-dot" class:connected></span>
+			<span class="status-text">{statusText}</span>
 		</div>
-	</a>
-{:else}
-	<button
-		type="button"
-		class="connect-tile"
-		class:connected
-		on:click={() => dispatch('click')}
-	>
-		{#if icon}
-			<div class="connect-icon">{icon}</div>
-		{/if}
-		<div class="connect-body">
-			<div class="connect-name">{name}</div>
-			{#if subtitle}
-				<div class="connect-sub">{subtitle}</div>
-			{/if}
-			<div class="connect-status">
-				<span class="status-dot" class:connected></span>
-				<span class="status-text">{statusText}</span>
-			</div>
-		</div>
-	</button>
-{/if}
+	</div>
+</svelte:element>
 
 <style>
 	.connect-tile,
