@@ -1,10 +1,10 @@
 # Story 022: Onboarding invite-code entry redesign
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** feature  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-26  
-**Completed:** —
+**Completed:** 2026-07-26
 
 ---
 

@@ -20,6 +20,7 @@
 	} from '$lib/api/onboarding';
 
 	let loading = true;
+	let submitting = false;
 	let inviteCode = '';
 	let pageError = '';
 	let state: OnboardingState = {
@@ -60,7 +61,7 @@
 			pageError = 'Please enter your invite code to begin.';
 			return;
 		}
-		loading = true;
+		submitting = true;
 		try {
 			const session = await createSession(inviteCode.trim());
 			setStoredOnboardingToken(session.token);
@@ -69,7 +70,8 @@
 			await goto(nextOnboardingPath(state));
 		} catch (error) {
 			pageError = error instanceof Error ? error.message : 'Could not start onboarding.';
-			loading = false;
+		} finally {
+			submitting = false;
 		}
 	}
 
@@ -95,11 +97,14 @@
 				placeholder="Example: rahat-beta"
 				bind:value={inviteCode}
 				required
-				error={pageError}
 			/>
 
-			<Button type="submit" variant="primary" fullWidth>
-				{loading ? 'Starting…' : 'Start onboarding'}
+			{#if pageError}
+				<div class="error-banner" role="alert">{pageError}</div>
+			{/if}
+
+			<Button type="submit" variant="primary" fullWidth disabled={submitting}>
+				{submitting ? 'Starting…' : 'Start onboarding'}
 			</Button>
 		</form>
 
@@ -123,6 +128,15 @@
 	.invite-form {
 		display: grid;
 		gap: var(--space-5);
+	}
+
+	.error-banner {
+		padding: var(--space-3) var(--space-4);
+		background: var(--rose-soft);
+		color: var(--rose);
+		border-radius: var(--radius-lg);
+		font-size: 13.5px;
+		font-weight: 500;
 	}
 
 	.help {

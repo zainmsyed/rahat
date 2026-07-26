@@ -1,5 +1,6 @@
+import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import OnboardingPage from './+page.svelte';
 
 const mockGoto = vi.fn();
@@ -38,6 +39,27 @@ describe('OnboardingPage', () => {
 			setItem: vi.fn(),
 			removeItem: vi.fn()
 		});
+	});
+
+	it('renders the invite form and shows a validation error for an empty code', async () => {
+		vi.stubGlobal('window', {
+			...window,
+			location: { href: 'http://localhost:5200/onboarding' },
+			history: { replaceState: vi.fn() }
+		});
+
+		const { container } = render(OnboardingPage);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		expect(screen.getByLabelText('Invite code *')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Start onboarding' })).toBeInTheDocument();
+
+		const form = container.querySelector('form');
+		if (!form) throw new Error('form not found');
+		await fireEvent.submit(form);
+		expect(screen.getByRole('alert')).toHaveTextContent(
+			'Please enter your invite code to begin.'
+		);
 	});
 
 	it('automatically starts setup when an invite is present in the URL', async () => {
