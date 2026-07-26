@@ -76,12 +76,6 @@
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		font-family: Inter, system-ui, sans-serif;
-		background: #f7f7fb;
-		color: #18222f;
-	}
 	.page {
 		min-height: 100vh;
 		display: grid;

@@ -42,77 +42,90 @@
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		font-family: Inter, system-ui, sans-serif;
-		background: #f7f7fb;
-		color: #18222f;
-	}
-
 	.page {
-		max-width: 960px;
+		max-width: var(--surface-max-width);
 		margin: 0 auto;
-		padding: 4rem 1.5rem 5rem;
+		padding: var(--space-10) var(--space-5) var(--space-12);
 	}
 
 	.hero {
-		padding: 2rem;
-		border-radius: 1.5rem;
-		background: linear-gradient(135deg, #ffffff, #eef4ff);
-		box-shadow: 0 18px 45px rgba(24, 34, 47, 0.08);
+		padding: var(--space-6);
+		border-radius: var(--radius-3xl);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		box-shadow: var(--shadow-md);
 	}
 
 	.eyebrow {
-		margin: 0 0 0.75rem;
-		font-size: 0.875rem;
-		font-weight: 700;
-		letter-spacing: 0.14em;
+		margin: 0 0 var(--space-3);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.18em;
 		text-transform: uppercase;
-		color: #2a6df4;
+		color: var(--primary-2);
 	}
 
 	h1 {
 		margin: 0;
-		font-size: clamp(2.5rem, 6vw, 4rem);
+		font-family: var(--font-display);
+		font-size: clamp(2rem, 6vw, 3rem);
+		font-weight: 400;
+		color: var(--ink);
 	}
 
 	.lede {
 		max-width: 42rem;
-		font-size: 1.125rem;
+		font-size: 15.5px;
+		color: var(--ink-2);
 		line-height: 1.6;
 	}
 
 	.actions {
 		display: flex;
-		gap: 1rem;
+		gap: var(--space-3);
 		flex-wrap: wrap;
-		margin-top: 1.5rem;
+		margin-top: var(--space-5);
 	}
 
 	.actions a {
-		padding: 0.85rem 1.15rem;
-		border-radius: 999px;
+		padding: 14px 20px;
+		border-radius: var(--radius-lg);
 		text-decoration: none;
 		font-weight: 600;
-		background: #18222f;
+		background: var(--primary);
 		color: white;
+		transition: all 0.2s var(--ease-out);
+	}
+
+	.actions a:hover {
+		background: var(--primary-2);
+		transform: translateY(-1px);
 	}
 
 	.card-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 1rem;
-		margin-top: 2rem;
+		grid-template-columns: 1fr;
+		gap: var(--space-4);
+		margin-top: var(--space-6);
 	}
 
 	article {
-		padding: 1.25rem;
-		border-radius: 1rem;
-		background: white;
-		box-shadow: 0 10px 30px rgba(24, 34, 47, 0.08);
+		padding: var(--space-4);
+		border-radius: var(--radius-xl);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		box-shadow: var(--shadow-sm);
 	}
 
-	h2 {
+	article h2 {
 		margin-top: 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--ink);
+	}
+
+	article p {
+		font-size: 14px;
+		color: var(--ink-2);
 	}
 </style>
