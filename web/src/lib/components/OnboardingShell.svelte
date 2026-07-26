@@ -49,6 +49,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: var(--space-3);
+		flex-wrap: wrap;
 		max-width: var(--surface-max-width);
 		width: 100%;
 		margin: 0 auto;
@@ -81,6 +83,7 @@
 		margin: 0 auto;
 		padding: 0 var(--space-5) var(--space-10);
 		position: relative;
+		min-width: 0;
 	}
 
 	.step {
@@ -91,6 +94,8 @@
 		border-radius: var(--radius-3xl);
 		box-shadow: var(--shadow-md);
 		padding: var(--space-8) var(--space-6);
+		min-width: 0;
+		overflow-wrap: break-word;
 	}
 
 	.step.active {
