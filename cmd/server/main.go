@@ -282,7 +282,13 @@ func main() {
 		writeJSON(w, http.StatusAccepted, map[string]any{"blocks": blocks})
 	}))
 	mux.HandleFunc("GET /schedule/plan", requireAuthenticatedUserForRoute(authRoutes, func(w http.ResponseWriter, r *http.Request, current authenticatedUser) {
-		day := parseDay(r.URL.Query().Get("date"))
+		dateValue := r.URL.Query().Get("date")
+		var day time.Time
+		if dateValue == "" {
+			day = localDateAsUTC(current.User.Timezone, time.Now())
+		} else {
+			day = parseDay(dateValue)
+		}
 		result, err := schedulerService.PlanDay(r.Context(), current.User.ID, day)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

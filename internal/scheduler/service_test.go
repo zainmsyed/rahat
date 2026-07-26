@@ -908,32 +908,28 @@ func TestSchedulerTimezoneAware(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		timezone     string
-		day          time.Time
-		wantDateStr  string
-		wantReadyHour int
+		name        string
+		timezone    string
+		day         time.Time
+		wantDateStr string
 	}{
 		{
-			name:         "America/Chicago user gets local date and morning ready time",
-			timezone:     "America/Chicago",
-			day:          time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
-			wantDateStr:  "2026-07-25",
-			wantReadyHour: 8,
+			name:        "America/Chicago user gets local date and window ready times",
+			timezone:    "America/Chicago",
+			day:         time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
+			wantDateStr: "2026-07-25",
 		},
 		{
-			name:         "Asia/Tokyo user gets local date and morning ready time",
-			timezone:     "Asia/Tokyo",
-			day:          time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
-			wantDateStr:  "2026-07-25",
-			wantReadyHour: 8,
+			name:        "Asia/Tokyo user gets local date and window ready times",
+			timezone:    "Asia/Tokyo",
+			day:         time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
+			wantDateStr: "2026-07-25",
 		},
 		{
-			name:         "UTC user is unchanged",
-			timezone:     "UTC",
-			day:          time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
-			wantDateStr:  "2026-07-25",
-			wantReadyHour: 8,
+			name:        "UTC user is unchanged",
+			timezone:    "UTC",
+			day:         time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
+			wantDateStr: "2026-07-25",
 		},
 	}
 
@@ -956,7 +952,15 @@ func TestSchedulerTimezoneAware(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Morning routine", DurationMinutes: 15, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+			_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Morning routine", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Afternoon routine", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Evening routine", DurationMinutes: 10, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayEvening}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -968,23 +972,30 @@ func TestSchedulerTimezoneAware(t *testing.T) {
 			if result.Date != tt.wantDateStr {
 				t.Fatalf("result.Date = %s, want %s", result.Date, tt.wantDateStr)
 			}
-			if len(result.Scheduled) != 1 {
-				t.Fatalf("len(Scheduled) = %d, want 1", len(result.Scheduled))
+			if len(result.Scheduled) != 3 {
+				t.Fatalf("len(Scheduled) = %d, want 3", len(result.Scheduled))
 			}
-			readyAt := result.Scheduled[0].ReadyAt
-			if readyAt == nil {
-				t.Fatal("ReadyAt is nil")
-			}
+
 			loc, err := time.LoadLocation(tt.timezone)
 			if err != nil {
 				t.Fatal(err)
 			}
-			localReady := readyAt.In(loc)
-			if localReady.Hour() != tt.wantReadyHour {
-				t.Fatalf("local ready hour = %d, want %d (readyAt=%s)", localReady.Hour(), tt.wantReadyHour, readyAt)
+			wantHour := map[tasks.TimeOfDayPreference]int{
+				tasks.TimeOfDayMorning:   8,
+				tasks.TimeOfDayAfternoon: 12,
+				tasks.TimeOfDayEvening:   16,
 			}
-			if y, m, d := localReady.Date(); fmt.Sprintf("%04d-%02d-%02d", y, m, d) != tt.wantDateStr {
-				t.Fatalf("local ready date = %04d-%02d-%02d, want %s", y, m, d, tt.wantDateStr)
+			for _, occ := range result.Scheduled {
+				if occ.ReadyAt == nil {
+					t.Fatal("ReadyAt is nil")
+				}
+				localReady := occ.ReadyAt.In(loc)
+				if localReady.Hour() != wantHour[occ.ScheduledTimeOfDay] {
+					t.Fatalf("%s local ready hour = %d, want %d (readyAt=%s)", occ.ScheduledTimeOfDay, localReady.Hour(), wantHour[occ.ScheduledTimeOfDay], occ.ReadyAt)
+				}
+				if y, m, d := localReady.Date(); fmt.Sprintf("%04d-%02d-%02d", y, m, d) != tt.wantDateStr {
+					t.Fatalf("%s local ready date = %04d-%02d-%02d, want %s", occ.ScheduledTimeOfDay, y, m, d, tt.wantDateStr)
+				}
 			}
 		})
 	}

@@ -15,11 +15,16 @@ var (
 	Windows   = []Window{Morning, Afternoon, Evening}
 )
 
-func StartTime(date time.Time, windowName string) time.Time {
+func locationOf(date time.Time) *time.Location {
 	loc := date.Location()
 	if loc == nil {
-		loc = time.UTC
+		return time.UTC
 	}
+	return loc
+}
+
+func StartTime(date time.Time, windowName string) time.Time {
+	loc := locationOf(date)
 	for _, window := range Windows {
 		if window.Name == windowName {
 			return time.Date(date.Year(), date.Month(), date.Day(), window.Start, 0, 0, 0, loc)
@@ -29,10 +34,7 @@ func StartTime(date time.Time, windowName string) time.Time {
 }
 
 func EndTime(date time.Time, windowName string) time.Time {
-	loc := date.Location()
-	if loc == nil {
-		loc = time.UTC
-	}
+	loc := locationOf(date)
 	for _, window := range Windows {
 		if window.Name == windowName {
 			return time.Date(date.Year(), date.Month(), date.Day(), window.End, 0, 0, 0, loc)
