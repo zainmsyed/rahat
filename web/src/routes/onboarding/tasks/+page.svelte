@@ -350,8 +350,7 @@
 
 	.saved-task {
 		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
+		flex-direction: column;
 		gap: var(--space-4);
 		min-width: 0;
 		padding: var(--space-4);
@@ -361,7 +360,6 @@
 	}
 
 	.saved-task-body {
-		flex: 1;
 		min-width: 0;
 	}
 
@@ -399,9 +397,14 @@
 
 	.saved-task-actions {
 		display: flex;
-		gap: var(--space-2);
-		flex-shrink: 0;
+		justify-content: flex-end;
+		gap: var(--space-3);
 		min-width: 0;
+	}
+
+	.saved-task-actions :global(button) {
+		min-width: auto;
+		padding: 10px 16px;
 	}
 
 	.error-banner {

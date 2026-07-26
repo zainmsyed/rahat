@@ -264,6 +264,18 @@
 		background-repeat: no-repeat;
 		background-position: right 14px center;
 		padding-right: 40px;
+		cursor: pointer;
+	}
+
+	select option {
+		background: var(--paper);
+		color: var(--ink);
+	}
+
+	select option:checked,
+	select option:hover {
+		background: var(--primary-bg);
+		color: var(--primary-2);
 	}
 
 	.subtasks {
