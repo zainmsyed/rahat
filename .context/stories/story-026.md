@@ -1,10 +1,10 @@
 # Story 026: Fix daily-budget slider tick alignment
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** bug  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-26  
-**Completed:** —
+**Completed:** 2026-07-26
 
 ---
 

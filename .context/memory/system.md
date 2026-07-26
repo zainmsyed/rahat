@@ -52,6 +52,8 @@
 - If the design system requires full visual control over dropdown menus, use a custom Select component instead of a native `<select>`. <!-- source: story-024 --> <!-- confidence: high -->
 - When a UI story redesigns multiple pages, add or update page-level tests for every redesigned page, not just the primary one. <!-- source: story-025 --> <!-- confidence: high -->
 - Use a semantic anchor element for actions that navigate to a URL instead of a button with a click handler that opens the link programmatically. <!-- source: story-025 --> <!-- confidence: high -->
+- Position slider tick labels proportionally to the underlying value range, not evenly across the track. <!-- source: story-026 --> <!-- confidence: high -->
+- When fixing a visual layout bug, add a regression test that asserts the presence or structure of the corrected element even when pixel-perfect alignment must be verified manually. <!-- source: story-026 --> <!-- confidence: high -->
 ### From successes
 - When a scheduler splits a daily time budget across windows, it should allocate demand exactly when total candidate demand fits the daily budget rather than enforcing an artificial proportional split that can reject feasible combinations. <!-- source: story-016 --> <!-- confidence: low — no signal in last 5 stories -->
 - When falling back from a preferred time window, prefer the nearest window before jumping to a distant one. <!-- source: story-016 --> <!-- confidence: low — no signal in last 5 stories -->
