@@ -22,6 +22,7 @@
 - Primary soft: rgba(122, 155, 118, 0.12)  <!-- source: story-020 -->
 - Primary glow: rgba(122, 155, 118, 0.22)  <!-- source: story-020 -->
 - Primary bg: rgba(122, 155, 118, 0.06)  <!-- source: story-020 -->
+- Primary track: rgba(122, 155, 118, 0.15)  <!-- source: story-021 -->
 
 ## Typography
 - Display font: 'DM Serif Display', serif  <!-- source: story-020 -->

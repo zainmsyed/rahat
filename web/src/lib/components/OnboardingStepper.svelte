@@ -21,7 +21,7 @@
 <style>
 	.progress-track {
 		height: 3px;
-		background: rgba(122, 155, 118, 0.15);
+		background: var(--primary-track);
 		border-radius: 2px;
 		overflow: hidden;
 		margin-bottom: var(--space-8);

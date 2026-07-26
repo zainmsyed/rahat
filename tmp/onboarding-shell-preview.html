@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+			rel="stylesheet"
+		/>
+		<!--1ejgf9--><meta name="description" content="Guided Rahat onboarding for profile setup, starter tasks, and first schedule seeding." class="s-m78dVg7rUSPl"/><!----><title>Rahat onboarding</title>
+		<style data-sveltekit>:root {
+  /* Colours */
+  --bg: #faf7f2;
+  --bg-soft: #f4f0e6;
+  --paper: #ffffff;
+  --ink: #1f1d1a;
+  --ink-2: #4a4640;
+  --ink-3: #8a8278;
+  --ink-4: #b8b0a4;
+  --line: #e3dccc;
+  --line-soft: #ebe5d8;
+  --primary: #7a9b76;
+  --primary-2: #5a7a56;
+  --primary-3: #466044;
+  --primary-soft: rgba(122, 155, 118, 0.12);
+  --primary-glow: rgba(122, 155, 118, 0.22);
+  --primary-bg: rgba(122, 155, 118, 0.06);
+  --rose: #b87a7a;
+  --rose-soft: #f0dcdc;
+  --success: #5a7a56;
+
+  /* Typography */
+  --font-display: 'DM Serif Display', serif;
+  --font-body: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(31, 29, 26, 0.04), 0 4px 12px -4px rgba(31, 29, 26, 0.06);
+  --shadow-md: 0 2px 8px rgba(31, 29, 26, 0.05), 0 12px 32px -12px rgba(31, 29, 26, 0.08);
+  --shadow-button: 0 2px 8px rgba(122, 155, 118, 0.3);
+  --shadow-button-hover: 0 4px 14px rgba(122, 155, 118, 0.4);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layout */
+  --surface-max-width: 520px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(122, 155, 118, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(232, 213, 183, 0.05) 0%, transparent 50%);
+  background-attachment: fixed;
+}
+
+.serif {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage {
+  width: 100%;
+  max-width: var(--surface-max-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+}
+
+@media (max-width: 540px) {
+  .stage {
+    padding: var(--space-5) var(--space-4);
+  }
+}
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-8) var(--space-6);
+}
+
+@media (max-width: 540px) {
+  .card {
+    padding: var(--space-6) var(--space-4);
+    border-radius: var(--radius-2xl);
+  }
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--primary-2);
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+}
+
+.display {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+.display em {
+  font-style: italic;
+  color: var(--primary-2);
+}
+
+.lede {
+  font-size: 15.5px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: var(--space-2);
+}
+
+.text-ink-2 {
+  color: var(--ink-2);
+}
+
+.text-ink-3 {
+  color: var(--ink-3);
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+
+	.placeholder.s-d7QCnCmacevA {
+		padding: var(--space-5);
+		background: var(--bg-soft);
+		border: 1px dashed var(--line);
+		border-radius: var(--radius-lg);
+		color: var(--ink-3);
+		text-align: center;
+	}
+ .s-d7QCnCmacevA{}
+
+	.page.s-m78dVg7rUSPl {
+		min-height: 100vh;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.topbar.s-m78dVg7rUSPl {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		max-width: var(--surface-max-width);
+		width: 100%;
+		margin: 0 auto;
+		padding: var(--space-6) var(--space-5) var(--space-3);
+	}
+
+	.wordmark.s-m78dVg7rUSPl {
+		font-family: var(--font-display);
+		font-size: 24px;
+		font-weight: 400;
+		letter-spacing: -0.01em;
+		color: var(--ink);
+	}
+
+	.wordmark.s-m78dVg7rUSPl span:where(.s-m78dVg7rUSPl) {
+		color: var(--primary-2);
+	}
+
+	.topbar-meta.s-m78dVg7rUSPl {
+		font-size: 12px;
+		color: var(--ink-3);
+		letter-spacing: 0.04em;
+		font-feature-settings: 'tnum';
+	}
+
+	.stage.s-m78dVg7rUSPl {
+		flex: 1;
+		width: 100%;
+		max-width: var(--surface-max-width);
+		margin: 0 auto;
+		padding: 0 var(--space-5) var(--space-10);
+		position: relative;
+	}
+
+	.step.s-m78dVg7rUSPl {
+		display: none;
+		animation: s-m78dVg7rUSPl-stepIn 0.5s var(--ease-out);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-3xl);
+		box-shadow: var(--shadow-md);
+		padding: var(--space-8) var(--space-6);
+	}
+
+	.step.active.s-m78dVg7rUSPl {
+		display: block;
+	}
+
+	@keyframes s-m78dVg7rUSPl-stepIn {
+		0% {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.step-eyebrow.s-m78dVg7rUSPl {
+		font-size: 11px;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--primary-2);
+		font-weight: 600;
+		margin-bottom: var(--space-3);
+	}
+
+	.step-title.s-m78dVg7rUSPl {
+		font-family: var(--font-display);
+		font-size: 34px;
+		line-height: 1.1;
+		letter-spacing: -0.005em;
+		color: var(--ink);
+		margin-bottom: var(--space-3);
+		font-weight: 400;
+	}
+
+	.step-lede.s-m78dVg7rUSPl {
+		font-size: 15.5px;
+		color: var(--ink-2);
+		line-height: 1.6;
+		margin-bottom: var(--space-6);
+	}
+
+	@media (max-width: 540px) {
+		.topbar.s-m78dVg7rUSPl {
+			padding: var(--space-5) var(--space-4) var(--space-3);
+		}
+
+		.stage.s-m78dVg7rUSPl {
+			padding: 0 var(--space-4) var(--space-8);
+		}
+
+		.step.s-m78dVg7rUSPl {
+			padding: var(--space-6) var(--space-4);
+			border-radius: var(--radius-2xl);
+		}
+
+		.step-title.s-m78dVg7rUSPl {
+			font-size: 28px;
+		}
+	}
+ .s-m78dVg7rUSPl{}
+
+	.progress-track.s-2GE42HJxUMQl {
+		height: 3px;
+		background: rgba(122, 155, 118, 0.15);
+		border-radius: 2px;
+		overflow: hidden;
+		margin-bottom: var(--space-8);
+	}
+
+	.progress-fill.s-2GE42HJxUMQl {
+		height: 100%;
+		background: var(--primary);
+		border-radius: 2px;
+		transition: width 0.5s var(--ease-out);
+	}
+ .s-2GE42HJxUMQl{}</style>
+	
+</head>
+<body>
+
+		<div style="display: contents"><div class="app-shell"><div class="page s-m78dVg7rUSPl"><header class="topbar s-m78dVg7rUSPl"><div class="wordmark s-m78dVg7rUSPl">Rahat<span class="s-m78dVg7rUSPl">.</span></div> <div class="topbar-meta s-m78dVg7rUSPl">3 of 6</div></header> <div class="progress-track s-2GE42HJxUMQl" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" aria-label="Onboarding progress"><div class="progress-fill s-2GE42HJxUMQl" style="width: 40%"></div></div><!----> <main class="stage s-m78dVg7rUSPl"><section class="step active s-m78dVg7rUSPl"><p class="step-eyebrow s-m78dVg7rUSPl">Step 3 of 6</p> <h1 class="step-title s-m78dVg7rUSPl">Start with what feels right.</h1> <p class="step-lede s-m78dVg7rUSPl">Pre-loaded for new parents. Pick what you'd actually want — you can add, remove, or change any of them later by replying to the bot.</p> <p class="placeholder s-d7QCnCmacevA">[Step content goes here in the next stories.]</p></section></main></div><!----></div> 
+			
+			
+		</div>
+	
+</body>
+</html>
