@@ -1,10 +1,10 @@
 # Story 020: Global design tokens and app shell
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** feature  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-26  
-**Completed:** —
+**Completed:** 2026-07-26
 
 ---
 

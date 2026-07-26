@@ -38,8 +38,10 @@
 - Every state-changing endpoint authenticated by a browser cookie must enforce the shared trusted-origin or CSRF policy and test trusted, missing, and mismatched origins. <!-- source: story-013 --> <!-- confidence: low — no signal in last 5 stories -->
 - When an HTTP response selects Access-Control-Allow-Origin based on the request Origin, always include a Vary: Origin header. <!-- source: story-014 --> <!-- confidence: low — no signal in last 5 stories -->
 - Do not rely solely on OS network-interface enumeration to build URLs that end users will open; always provide an explicit configuration override and use enumeration only as a fallback. <!-- source: story-014 --> <!-- confidence: low — no signal in last 5 stories -->
-- When displaying a persisted local calendar date to a user, parse the canonical date string in the target timezone rather than formatting a UTC-midnight instant. <!-- source: story-015 --> <!-- confidence: high -->
-- Derive post-action status from the action response, not from stale client state captured before the action. <!-- source: story-015 --> <!-- confidence: high -->
+- When displaying a persisted local calendar date to a user, parse the canonical date string in the target timezone rather than formatting a UTC-midnight instant. <!-- source: story-015 --> <!-- confidence: low — no signal in last 5 stories -->
+- Derive post-action status from the action response, not from stale client state captured before the action. <!-- source: story-015 --> <!-- confidence: low — no signal in last 5 stories -->
+- Do not load the same external resource via both CSS @import and an HTML <link>; choose a single delivery path to avoid duplicate requests and parse overhead. <!-- source: story-020 --> <!-- confidence: high -->
+- New reusable UI primitives must ship with at least one automated render/state test and be recorded in the project component registry. <!-- source: story-020 --> <!-- confidence: high -->
 ### From successes
 - When a scheduler splits a daily time budget across windows, it should allocate demand exactly when total candidate demand fits the daily budget rather than enforcing an artificial proportional split that can reject feasible combinations. <!-- source: story-016 --> <!-- confidence: high -->
 - When falling back from a preferred time window, prefer the nearest window before jumping to a distant one. <!-- source: story-016 --> <!-- confidence: high -->

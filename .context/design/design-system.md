@@ -17,7 +17,11 @@
 - Primary 2: #5a7a56  <!-- source: story-020 -->
 - Primary 3: #466044  <!-- source: story-020 -->
 - Rose: #b87a7a  <!-- source: story-020 -->
+- Rose soft: #f0dcdc  <!-- source: story-020 -->
 - Success: #5a7a56  <!-- source: story-020 -->
+- Primary soft: rgba(122, 155, 118, 0.12)  <!-- source: story-020 -->
+- Primary glow: rgba(122, 155, 118, 0.22)  <!-- source: story-020 -->
+- Primary bg: rgba(122, 155, 118, 0.06)  <!-- source: story-020 -->
 
 ## Typography
 - Display font: 'DM Serif Display', serif  <!-- source: story-020 -->
