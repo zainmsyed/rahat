@@ -44,8 +44,8 @@
 - New reusable UI primitives must ship with at least one automated render/state test and be recorded in the project component registry. <!-- source: story-020 --> <!-- confidence: low — no signal in last 5 stories -->
 - Shell and container components must include min-width: 0 on flex ancestors and text-wrapping safeguards so child content cannot break the declared surface width. <!-- source: story-021 --> <!-- confidence: low — no signal in last 5 stories -->
 - New or rewritten layout components must ship with automated render tests that exercise their primary props and visible state. <!-- source: story-021 --> <!-- confidence: low — no signal in last 5 stories -->
-- Distinguish initial-load state from action-in-progress state so that submitting a form does not replace the form with a loading spinner or otherwise destabilize the user's context. <!-- source: story-022 --> <!-- confidence: high -->
-- When a UI story redesigns a page, add or update a page-level test that exercises the primary interactive path and its validation or error state. <!-- source: story-022 --> <!-- confidence: high -->
+- Distinguish initial-load state from action-in-progress state so that submitting a form does not replace the form with a loading spinner or otherwise destabilize the user's context. <!-- source: story-022 --> <!-- confidence: low — no signal in last 5 stories -->
+- When a UI story redesigns a page, add or update a page-level test that exercises the primary interactive path and its validation or error state. <!-- source: story-022 --> <!-- confidence: low — no signal in last 5 stories -->
 - Placeholder text in constrained inputs should fit the narrowest supported viewport without clipping. <!-- source: story-023 --> <!-- confidence: high -->
 - Page-level tests should cover both empty-state and pre-filled-state render paths when the page can load existing data from an API. <!-- source: story-023 --> <!-- confidence: high -->
 - When a page redesign requires changes to a shared design component, update that component's tests to cover the new behavior and record any new props in the component registry. <!-- source: story-024 --> <!-- confidence: high -->
@@ -54,6 +54,8 @@
 - Use a semantic anchor element for actions that navigate to a URL instead of a button with a click handler that opens the link programmatically. <!-- source: story-025 --> <!-- confidence: high -->
 - Position slider tick labels proportionally to the underlying value range, not evenly across the track. <!-- source: story-026 --> <!-- confidence: high -->
 - When fixing a visual layout bug, add a regression test that asserts the presence or structure of the corrected element even when pixel-perfect alignment must be verified manually. <!-- source: story-026 --> <!-- confidence: high -->
+- When an input accepts either a URL or a raw token/id, parse the URL and extract the relevant value before submitting it to the API. <!-- source: story-027 --> <!-- confidence: high -->
+- Form inputs should expose a clear invalid/error API (e.g., separate error text and invalid boolean props) instead of requiring placeholder content to trigger visual error states. <!-- source: story-027 --> <!-- confidence: high -->
 ### From successes
 - When a scheduler splits a daily time budget across windows, it should allocate demand exactly when total candidate demand fits the daily budget rather than enforcing an artificial proportional split that can reject feasible combinations. <!-- source: story-016 --> <!-- confidence: low — no signal in last 5 stories -->
 - When falling back from a preferred time window, prefer the nearest window before jumping to a distant one. <!-- source: story-016 --> <!-- confidence: low — no signal in last 5 stories -->
