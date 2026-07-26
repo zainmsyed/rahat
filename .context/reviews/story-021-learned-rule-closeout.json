@@ -1,0 +1,17 @@
+{
+  "note": "",
+  "candidates": [
+    {
+      "text": "Shell and container components must include min-width: 0 on flex ancestors and text-wrapping safeguards so child content cannot break the declared surface width.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "The story-021 review found onboarding step content spilling out of the 520 px stage card on narrow viewports because flex shrink defaults and unbreakable content were not constrained. Adding min-width: 0 and overflow-wrap prevents the shell from being pushed wider than intended."
+    },
+    {
+      "text": "New or rewritten layout components must ship with automated render tests that exercise their primary props and visible state.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "OnboardingShell and OnboardingStepper were rewritten without tests, so regressions in the wordmark, step counter, title, intro, progress bar ARIA state, or slot rendering could only be caught manually. Adding component tests closes that gap for future shell work."
+    }
+  ]
+}
