@@ -1,11 +1,13 @@
 <script lang="ts">
 	export let id: string;
 	export let label: string;
-	export let value = '';
+	export let value: string | number = '';
 	export let placeholder = '';
 	export let type: 'text' | 'email' | 'password' | 'number' = 'text';
 	export let required = false;
 	export let error = '';
+	export let min: number | string = '';
+	export let max: number | string = '';
 </script>
 
 <div class="input-wrapper">
@@ -16,6 +18,8 @@
 		type={type}
 		placeholder={placeholder}
 		required={required}
+		min={min}
+		max={max}
 		bind:value
 		class:error={error !== ''}
 	/>

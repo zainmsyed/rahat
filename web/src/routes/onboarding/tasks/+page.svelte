@@ -3,6 +3,9 @@
 	import { onMount } from 'svelte';
 	import OnboardingShell from '$lib/components/OnboardingShell.svelte';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
+	import Button from '$lib/components/design/Button.svelte';
+	import Tile from '$lib/components/design/Tile.svelte';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
 	import {
 		addStarterTask,
 		buildOnboardingSteps,
@@ -28,7 +31,13 @@
 	let taskSaveError = '';
 	let addingStarterId = '';
 	let editingTaskId = '';
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = {
+		has_profile: false,
+		telegram_linked: false,
+		calendar_connected: false,
+		tasks: [],
+		starter_templates: []
+	};
 	let sessionToken = '';
 	let taskDraft: TaskDraft = emptyTaskDraft();
 
@@ -61,6 +70,7 @@
 	}
 
 	async function addStarter(templateId: string) {
+		if (addingStarterId) return;
 		taskSaveError = '';
 		addingStarterId = templateId;
 		try {
@@ -126,6 +136,20 @@
 			taskSaveError = error instanceof Error ? error.message : 'Could not remove that task.';
 		}
 	}
+
+	function starterSubtitle(template: {
+		description: string;
+		duration_minutes: number;
+		cadence_type: 'interval' | 'count';
+		cadence_value: number;
+		subtasks: { name: string; duration_minutes: number }[];
+	}) {
+		const parts = [`${template.duration_minutes} min`, formatTaskFrequency(template)];
+		if (template.subtasks.length > 0) {
+			parts.push(`${template.subtasks.length} step(s)`);
+		}
+		return parts.join(' · ');
+	}
 </script>
 
 {#if loading}
@@ -137,39 +161,45 @@
 		title="Add at least one task."
 		intro="Start with a ready-made task or make your own. If a task works better in steps, you can break it into smaller parts."
 	>
-		<section class="panel active">
-			<div class="panel-header split">
+		<div class="tasks-page">
+			<div class="section-header">
 				<div>
-					<p class="label">{formatStepLabel(steps[4])}</p>
-					<h2>Add at least one task</h2>
-					<p>Pick a starter idea or create your own. You only need one task to keep moving.</p>
+					<p class="step-label">{formatStepLabel(steps[4])}</p>
+					<h2 class="section-title">Add at least one task</h2>
+					<p class="section-lede">
+						Pick a starter idea or create your own. You only need one task to keep moving.
+					</p>
 				</div>
-				<button type="button" class="ghost" on:click={beginNewTask}>Add a custom task</button>
+				<Button variant="secondary" on:click={beginNewTask}>Add a custom task</Button>
 			</div>
 
-			<div class="starter-grid">
-				{#each state.starter_templates as template}
-					<article>
-						<h3>{template.name}</h3>
-						<p>{template.description}</p>
-						<p class="meta">{template.duration_minutes} min · {formatTaskFrequency(template)}</p>
-						{#if template.subtasks.length > 0}
-							<ul>
-								{#each template.subtasks as subtask}
-									<li>{subtask.name} · {subtask.duration_minutes} min</li>
-								{/each}
-							</ul>
-						{/if}
-						<button type="button" on:click={() => addStarter(template.id)} disabled={addingStarterId === template.id}>
-							{addingStarterId === template.id ? 'Adding…' : 'Add this starter task'}
-						</button>
-					</article>
-				{/each}
-			</div>
+			<section class="starters" aria-labelledby="starters-title">
+				<h3 id="starters-title" class="subsection-title">Starter ideas</h3>
+				{#if state.starter_templates.length === 0}
+					<p class="empty">No starter ideas available right now.</p>
+				{:else}
+					<div class="starter-grid">
+						{#each state.starter_templates as template}
+							<Tile
+								title={template.name}
+								subtitle={starterSubtitle(template)}
+								icon="✨"
+								selected={addingStarterId === template.id}
+								on:click={() => addStarter(template.id)}
+							/>
+						{/each}
+					</div>
+				{/if}
+			</section>
 
-			<div class="editor-panel">
-				<h3>{editingTaskId ? 'Edit this task' : 'Create a custom task'}</h3>
-				<p>Required fields are marked in the form. If the task has separate steps, add them before you save.</p>
+			<section class="editor-section" aria-labelledby="editor-title">
+				<h3 id="editor-title" class="subsection-title">
+					{editingTaskId ? 'Edit this task' : 'Create a custom task'}
+				</h3>
+				<p class="hint">
+					Required fields are marked in the form. If the task has separate steps, add them
+					before you save.
+				</p>
 				<TaskEditor
 					draft={taskDraft}
 					saving={savingTask}
@@ -178,45 +208,60 @@
 					on:save={saveTaskStep}
 					on:cancel={beginNewTask}
 				/>
-			</div>
+			</section>
 
-			<div class="saved-tasks">
-				<h3>Your saved tasks</h3>
+			<section class="saved-tasks" aria-labelledby="saved-title">
+				<h3 id="saved-title" class="subsection-title">Your saved tasks</h3>
 				{#if state.tasks.length === 0}
-					<p class="empty">No tasks yet. Add at least one starter or custom task to continue.</p>
+					<InfoBox>No tasks yet. Add at least one starter or custom task to continue.</InfoBox>
 				{:else}
-					{#each state.tasks as task}
-						<article class="saved-task">
-							<div>
-								<h4>{task.name}</h4>
-								<p>{task.description || 'No extra note added.'}</p>
-								<p class="meta">{task.duration_minutes} min · {task.priority} priority · {task.time_of_day_preference}</p>
-								{#if task.subtasks.length > 0}
-									<ul>
-										{#each task.subtasks as subtask}
-											<li>{subtask.name} · {subtask.duration_minutes} min</li>
-										{/each}
-									</ul>
-								{/if}
-							</div>
-							<div class="row-actions">
-								<button type="button" class="ghost" on:click={() => beginEditTask(task)}>Edit</button>
-								<button type="button" class="danger" on:click={() => removeTask(task.id)}>Remove</button>
-							</div>
-						</article>
-					{/each}
+					<ul class="saved-list">
+						{#each state.tasks as task}
+							<li class="saved-task">
+								<div class="saved-task-body">
+									<h4>{task.name}</h4>
+									<p class="task-note">
+										{task.description || 'No extra note added.'}
+									</p>
+									<p class="task-meta">
+										{task.duration_minutes} min · {task.priority} priority · {task.time_of_day_preference}
+										{#if task.subtasks.length > 0}
+											· {task.subtasks.length} step(s)
+										{/if}
+									</p>
+									{#if task.subtasks.length > 0}
+										<ul class="subtask-list">
+											{#each task.subtasks as subtask}
+												<li>{subtask.name} · {subtask.duration_minutes} min</li>
+											{/each}
+										</ul>
+									{/if}
+								</div>
+								<div class="saved-task-actions">
+									<Button variant="secondary" on:click={() => beginEditTask(task)}>Edit</Button>
+									<Button variant="text" on:click={() => removeTask(task.id)}>Remove</Button>
+								</div>
+							</li>
+						{/each}
+					</ul>
 				{/if}
-			</div>
+			</section>
 
 			{#if taskSaveError}
-				<p class="error-banner">{taskSaveError}</p>
+				<p class="error-banner" role="alert">{taskSaveError}</p>
 			{/if}
 
-			<div class="actions between">
-				<button type="button" class="ghost" on:click={() => goto('/onboarding/calendar')}>Back</button>
-				<button type="button" on:click={() => goto('/onboarding/review')} disabled={state.tasks.length === 0}>Review my setup</button>
+			<div class="actions">
+				<Button variant="secondary" on:click={() => goto('/onboarding/calendar')}>Back</Button>
+				<Button
+					variant="primary"
+					disabled={state.tasks.length === 0}
+					on:click={() => goto('/onboarding/review')}
+				>
+					Review my setup
+				</Button>
 			</div>
-		</section>
+		</div>
 	</OnboardingShell>
 {/if}
 
@@ -226,90 +271,165 @@
 		display: grid;
 		place-items: center;
 		font-size: 1.1rem;
+		color: var(--ink-2);
 	}
 
-	.panel {
+	.tasks-page {
 		display: grid;
-		gap: 1rem;
-		border: 2px solid #d6e4ff;
+		gap: var(--space-6);
 	}
 
-	.panel-header.split,
-	.saved-task,
-	.actions.between,
-	.row-actions {
+	.section-header {
 		display: flex;
 		justify-content: space-between;
-		gap: 1rem;
-		align-items: start;
+		align-items: flex-start;
+		gap: var(--space-4);
+		min-width: 0;
 	}
 
-	button {
-		padding: 0.85rem 1.1rem;
-		border-radius: 999px;
-		border: none;
-		background: #2a6df4;
-		color: white;
-		font: inherit;
-		font-weight: 700;
-		cursor: pointer;
+	.section-header > div {
+		min-width: 0;
 	}
 
-	button.ghost {
-		background: white;
-		color: #14202c;
-		border: 1px solid #cbd5e1;
+	.step-label {
+		font-size: 11px;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--primary-2);
+		font-weight: 600;
+		margin-bottom: var(--space-2);
 	}
 
-	button.danger {
-		background: #b42318;
+	.section-title {
+		font-family: var(--font-display);
+		font-size: 28px;
+		line-height: 1.1;
+		font-weight: 400;
+		color: var(--ink);
+		margin-bottom: var(--space-2);
 	}
 
-	button:disabled {
-		opacity: 0.7;
-		cursor: wait;
+	.section-lede {
+		font-size: 15.5px;
+		color: var(--ink-2);
+		line-height: 1.6;
+	}
+
+	.subsection-title {
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--ink);
+		margin-bottom: var(--space-3);
+	}
+
+	.hint,
+	.empty {
+		font-size: 14px;
+		color: var(--ink-3);
+		margin-bottom: var(--space-4);
 	}
 
 	.starter-grid {
 		display: grid;
-		gap: 1rem;
-		grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+		gap: var(--space-3);
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 	}
 
-	.starter-grid article,
-	.saved-task,
-	.editor-panel {
-		padding: 1rem;
-		border: 1px solid #dbe4ee;
-		border-radius: 1rem;
-		background: #fbfdff;
-	}
-
+	.editor-section,
 	.saved-tasks {
 		display: grid;
-		gap: 0.8rem;
 	}
 
-	.meta,
-	.empty {
-		color: #5d6b82;
+	.saved-list {
+		list-style: none;
+		display: grid;
+		gap: var(--space-3);
+		padding: 0;
+		margin: 0;
+	}
+
+	.saved-task {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: var(--space-4);
+		min-width: 0;
+		padding: var(--space-4);
+		background: var(--paper);
+		border: 1.5px solid var(--line);
+		border-radius: var(--radius-lg);
+	}
+
+	.saved-task-body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.saved-task-body h4 {
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--ink);
+		margin: 0 0 var(--space-1);
+	}
+
+	.task-note {
+		font-size: 14px;
+		color: var(--ink-2);
+		margin: 0 0 var(--space-1);
+		word-wrap: break-word;
+	}
+
+	.task-meta {
+		font-size: 13px;
+		color: var(--ink-3);
+		margin: 0 0 var(--space-2);
+	}
+
+	.subtask-list {
+		list-style: disc;
+		padding-left: var(--space-5);
+		margin: 0;
+		font-size: 13px;
+		color: var(--ink-3);
+	}
+
+	.subtask-list li {
+		margin-bottom: var(--space-1);
+	}
+
+	.saved-task-actions {
+		display: flex;
+		gap: var(--space-2);
+		flex-shrink: 0;
+		min-width: 0;
 	}
 
 	.error-banner {
-		color: #b42318;
+		color: var(--rose);
 		font-weight: 600;
-		padding: 0.9rem 1rem;
-		border-radius: 1rem;
-		background: #fff1f0;
+		padding: var(--space-4);
+		border-radius: var(--radius-lg);
+		background: var(--rose-soft);
 	}
 
-	@media (max-width: 720px) {
-		.panel-header.split,
+	.actions {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-4);
+		padding-top: var(--space-2);
+		min-width: 0;
+	}
+
+	@media (max-width: 540px) {
+		.section-header,
 		.saved-task,
-		.actions.between,
-		.row-actions {
+		.actions {
 			flex-direction: column;
 			align-items: stretch;
+		}
+
+		.saved-task-actions {
+			width: 100%;
 		}
 	}
 </style>

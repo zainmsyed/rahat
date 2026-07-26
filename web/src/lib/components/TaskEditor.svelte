@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
+	import Input from '$lib/components/design/Input.svelte';
+	import Button from '$lib/components/design/Button.svelte';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
 	import type { TaskDraft } from '$lib/api/onboarding';
 
 	export let draft: TaskDraft;
@@ -51,40 +54,55 @@
 </script>
 
 <div class="editor">
-	<div class="grid">
-		<label>
-			<span>Task name *</span>
-			<input bind:value={workingDraft.name} placeholder="Example: Wipe down the kitchen" />
-		</label>
-
-		<label>
-			<span>How many minutes does this usually take? *</span>
-			<input bind:value={workingDraft.duration_minutes} type="number" min="1" max="240" />
-		</label>
+	<div class="row two">
+		<Input
+			id="task-name"
+			label="Task name"
+			placeholder="Example: Wipe down the kitchen"
+			required
+			bind:value={workingDraft.name}
+		/>
+		<Input
+			id="task-duration"
+			label="How many minutes does this usually take?"
+			type="number"
+			min={1}
+			max={240}
+			required
+			bind:value={workingDraft.duration_minutes}
+		/>
 	</div>
 
-	<label>
-		<span>Helpful note (optional)</span>
-		<textarea bind:value={workingDraft.description} rows="3" placeholder="Add any reminder that would help later."></textarea>
+	<label class="field" for="task-description">
+		<span class="field-label">Helpful note <span class="optional">(optional)</span></span>
+		<textarea
+			id="task-description"
+			bind:value={workingDraft.description}
+			rows="3"
+			placeholder="Add any reminder that would help later."
+		></textarea>
 	</label>
 
-	<div class="grid three">
-		<label>
-			<span>How often should Rahat plan this? *</span>
-			<select bind:value={workingDraft.cadence_type}>
+	<div class="row three">
+		<label class="field" for="task-cadence-type">
+			<span class="field-label">How often should Rahat plan this?</span>
+			<select id="task-cadence-type" bind:value={workingDraft.cadence_type}>
 				<option value="interval">Every few days</option>
 				<option value="count">A few times each week</option>
 			</select>
 		</label>
-
-		<label>
-			<span>How many? *</span>
-			<input bind:value={workingDraft.cadence_value} type="number" min="1" max="31" />
-		</label>
-
-		<label>
-			<span>Priority *</span>
-			<select bind:value={workingDraft.priority}>
+		<Input
+			id="task-cadence-value"
+			label="How many?"
+			type="number"
+			min={1}
+			max={31}
+			required
+			bind:value={workingDraft.cadence_value}
+		/>
+		<label class="field" for="task-priority">
+			<span class="field-label">Priority</span>
+			<select id="task-priority" bind:value={workingDraft.priority}>
 				<option value="high">High</option>
 				<option value="medium">Medium</option>
 				<option value="low">Low</option>
@@ -92,9 +110,9 @@
 		</label>
 	</div>
 
-	<label>
-		<span>Best time of day *</span>
-		<select bind:value={workingDraft.time_of_day_preference}>
+	<label class="field" for="task-time">
+		<span class="field-label">Best time of day</span>
+		<select id="task-time" bind:value={workingDraft.time_of_day_preference}>
 			<option value="morning">Morning</option>
 			<option value="afternoon">Afternoon</option>
 			<option value="evening">Evening</option>
@@ -102,37 +120,45 @@
 		</select>
 	</label>
 
-	<section class="subtasks">
-		<div class="subtask-header">
+	<section class="subtasks" aria-labelledby="subtasks-title">
+		<div class="subtasks-header">
 			<div>
-				<h3>Optional smaller steps</h3>
-				<p>If this task works better as steps, add them here.</p>
+				<h3 id="subtasks-title">Optional smaller steps</h3>
+				<p class="subtasks-lede">If this task works better as steps, add them here.</p>
 			</div>
-			<button type="button" on:click={addSubtask}>Add a step</button>
+			<Button variant="secondary" on:click={addSubtask}>Add a step</Button>
 		</div>
 
 		{#if workingDraft.subtasks.length === 0}
-			<p class="empty">No steps added. That is okay for a simple one-step task.</p>
+			<InfoBox>No steps added. That is okay for a simple one-step task.</InfoBox>
 		{/if}
 
 		{#each workingDraft.subtasks as subtask, index}
 			<div class="subtask-card">
 				<div class="subtask-headline">
 					<h4>Step {index + 1}</h4>
-					<button type="button" class="ghost" on:click={() => removeSubtask(index)}>Remove</button>
+					<Button variant="text" on:click={() => removeSubtask(index)}>Remove</Button>
 				</div>
-				<div class="grid three">
-					<label>
-						<span>Step name *</span>
-						<input bind:value={subtask.name} placeholder="Example: Move to dryer" />
-					</label>
-					<label>
-						<span>Minutes *</span>
-						<input bind:value={subtask.duration_minutes} type="number" min="1" max="240" />
-					</label>
-					<label>
-						<span>Best time *</span>
-						<select bind:value={subtask.time_of_day_preference}>
+				<div class="row three">
+					<Input
+						id="subtask-{index}-name"
+						label="Step name"
+						placeholder="Example: Move to dryer"
+						required
+						bind:value={subtask.name}
+					/>
+					<Input
+						id="subtask-{index}-duration"
+						label="Minutes"
+						type="number"
+						min={1}
+						max={240}
+						required
+						bind:value={subtask.duration_minutes}
+					/>
+					<label class="field" for="subtask-{index}-time">
+						<span class="field-label">Best time</span>
+						<select id="subtask-{index}-time" bind:value={subtask.time_of_day_preference}>
 							<option value="morning">Morning</option>
 							<option value="afternoon">Afternoon</option>
 							<option value="evening">Evening</option>
@@ -140,142 +166,170 @@
 						</select>
 					</label>
 				</div>
-				<label>
-					<span>Wait this many minutes after the previous step (optional)</span>
-					<input bind:value={subtask.min_gap_after_previous_minutes} type="number" min="0" max="1440" />
-				</label>
+				<Input
+					id="subtask-{index}-gap"
+					label="Wait this many minutes after the previous step (optional)"
+					type="number"
+					min={0}
+					max={1440}
+					bind:value={subtask.min_gap_after_previous_minutes}
+				/>
 			</div>
 		{/each}
 	</section>
 
 	{#if error}
-		<p class="error">{error}</p>
+		<p class="error-banner" role="alert">{error}</p>
 	{/if}
 
 	<div class="actions">
-		<button type="button" class="ghost" on:click={() => dispatch('cancel')}>Cancel</button>
-		<button type="button" on:click={submit} disabled={saving}>{saving ? 'Saving…' : submitLabel}</button>
+		<Button variant="secondary" on:click={() => dispatch('cancel')}>Cancel</Button>
+		<Button variant="primary" disabled={saving} on:click={submit}>
+			{saving ? 'Saving…' : submitLabel}
+		</Button>
 	</div>
 </div>
 
 <style>
 	.editor {
 		display: grid;
-		gap: 1rem;
+		gap: var(--space-5);
 	}
 
-	.grid {
+	.row {
 		display: grid;
-		gap: 1rem;
+		gap: var(--space-4);
+		grid-template-columns: 1fr;
+	}
+
+	.row.two {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.grid.three {
+	.row.three {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 
-	label {
+	.field {
 		display: grid;
-		gap: 8px;
-		font-weight: 600;
+		gap: var(--space-2);
 	}
 
-	span {
-		font-size: 0.95rem;
+	.field-label {
+		display: block;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--ink-2);
 	}
 
-	input,
+	.field-label .optional {
+		color: var(--ink-3);
+		font-weight: 400;
+	}
+
 	textarea,
 	select {
-		padding: 12px 16px;
-		border-radius: 12px;
-		border: 1.5px solid var(--rahat-line, #e3dccc);
-		font: inherit;
-		color: var(--rahat-ink, #1f1d1a);
-		background: var(--rahat-paper, #ffffff);
+		width: 100%;
+		padding: 14px 16px;
+		background: var(--paper);
+		border: 1.5px solid var(--line);
+		border-radius: var(--radius-md);
+		font-size: 16px;
+		color: var(--ink);
+		font-family: inherit;
+		transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
 	}
 
-	input:focus,
+	textarea::placeholder,
+	select::placeholder {
+		color: var(--ink-4);
+	}
+
 	textarea:focus,
 	select:focus {
 		outline: none;
-		border-color: var(--rahat-primary, #7a9b76);
-		box-shadow: 0 0 0 4px var(--rahat-primary-glow, rgba(122, 155, 118, 0.22));
+		border-color: var(--primary);
+		box-shadow: 0 0 0 4px var(--primary-glow);
 	}
 
 	textarea {
 		resize: vertical;
+		min-height: 80px;
+	}
+
+	select {
+		appearance: none;
+		-webkit-appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a8278' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 14px center;
+		padding-right: 40px;
 	}
 
 	.subtasks {
-		padding: 1rem;
-		border-radius: 1rem;
-		background: var(--rahat-surface-soft, #f4f0e6);
-		border: 1px solid var(--rahat-line-soft, #ebe5d8);
+		display: grid;
+		gap: var(--space-4);
+		padding: var(--space-5);
+		background: var(--bg-soft);
+		border: 1px solid var(--line-soft);
+		border-radius: var(--radius-lg);
 	}
 
-	.subtask-header,
-	.subtask-headline,
-	.actions {
+	.subtasks-header,
+	.subtask-headline {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
+		gap: var(--space-4);
+		min-width: 0;
 	}
 
-	h3,
-	h4,
-	p {
+	.subtasks-header h3,
+	.subtask-headline h4 {
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--ink);
 		margin: 0;
 	}
 
+	.subtasks-lede {
+		font-size: 13px;
+		color: var(--ink-3);
+		margin: var(--space-1) 0 0;
+	}
+
 	.subtask-card {
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px solid var(--rahat-line, #e3dccc);
 		display: grid;
-		gap: 12px;
+		gap: var(--space-4);
+		padding: var(--space-4);
+		background: var(--paper);
+		border: 1.5px solid var(--line);
+		border-radius: var(--radius-lg);
 	}
 
-	.empty {
-		margin-top: 0.75rem;
-		color: var(--rahat-ink-muted, #8a8278);
-	}
-
-	button {
-		padding: 12px 16px;
-		border: none;
-		border-radius: 999px;
-		background: var(--rahat-primary, #7a9b76);
-		color: var(--rahat-paper, #ffffff);
-		font: inherit;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	button.ghost {
-		background: var(--rahat-paper, #ffffff);
-		color: var(--rahat-ink-secondary, #4a4640);
-		border: 1.5px solid var(--rahat-line, #e3dccc);
-	}
-
-	button:disabled {
-		opacity: 0.65;
-		cursor: wait;
-	}
-
-	.error {
-		color: var(--rahat-rose, #b87a7a);
+	.error-banner {
+		color: var(--rose);
 		font-weight: 600;
+		padding: var(--space-4);
+		border-radius: var(--radius-lg);
+		background: var(--rose-soft);
 	}
 
-	@media (max-width: 720px) {
-		.grid,
-		.grid.three {
+	.actions {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-4);
+		padding-top: var(--space-2);
+		min-width: 0;
+	}
+
+	@media (max-width: 540px) {
+		.row.two,
+		.row.three {
 			grid-template-columns: 1fr;
 		}
 
-		.subtask-header,
+		.subtasks-header,
 		.subtask-headline,
 		.actions {
 			flex-direction: column;
