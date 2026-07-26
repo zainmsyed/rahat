@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import Input from '$lib/components/design/Input.svelte';
+	import Button from '$lib/components/design/Button.svelte';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
 	import { exchangeAccessLink, getCurrentSession, logout, type CurrentSession } from '$lib/api/auth';
 
 	let loading = true;
@@ -8,20 +11,14 @@
 	let loggingOut = false;
 	let pageError = '';
 	let session: CurrentSession = { authenticated: false };
+	let tokenInput = '';
 
 	onMount(async () => {
-		const token = new URL(window.location.href).searchParams.get('token')?.trim() ?? '';
-		if (token) {
-			exchanging = true;
-			try {
-				session = await exchangeAccessLink(token);
-				await goto('/tasks');
-				return;
-			} catch (error) {
-				pageError = error instanceof Error ? error.message : 'Could not use that access link.';
-			} finally {
-				exchanging = false;
-			}
+		const urlToken = new URL(window.location.href).searchParams.get('token')?.trim() ?? '';
+		if (urlToken) {
+			tokenInput = urlToken;
+			await doExchange(urlToken);
+			return;
 		}
 		try {
 			session = await getCurrentSession();
@@ -31,6 +28,27 @@
 			loading = false;
 		}
 	});
+
+	async function doExchange(token: string) {
+		exchanging = true;
+		pageError = '';
+		try {
+			session = await exchangeAccessLink(token);
+			await goto('/tasks');
+		} catch (error) {
+			pageError = error instanceof Error ? error.message : 'Could not use that access link.';
+			session = { authenticated: false };
+		} finally {
+			exchanging = false;
+			loading = false;
+		}
+	}
+
+	async function submitToken() {
+		const token = tokenInput.trim();
+		if (!token) return;
+		await doExchange(token);
+	}
 
 	async function signOut() {
 		pageError = '';
@@ -53,24 +71,53 @@
 <div class="page">
 	<section class="card">
 		<p class="eyebrow">Rahat beta</p>
-		<h1>{session.authenticated ? 'You are signed in.' : 'Use your beta access link.'}</h1>
+		<h1 class="display">
+			{session.authenticated ? 'You are signed in.' : 'Use your beta access link.'}
+		</h1>
+
 		{#if loading || exchanging}
-			<p>{exchanging ? 'Checking your access link…' : 'Checking your session…'}</p>
+			<InfoBox title={exchanging ? 'Checking your access link…' : 'Checking your session…'}>
+				{exchanging
+					? 'One moment while we exchange your access link.'
+					: 'Looking up whether you are already signed in.'}
+			</InfoBox>
 		{:else if session.authenticated}
-			<p><strong>{session.user?.display_name}</strong> is signed in on this browser.</p>
-			<p>This beta currently uses operator-issued access links rather than passwords.</p>
+			<p class="lede">
+				<strong>{session.user?.display_name}</strong> is signed in on this browser.
+			</p>
+			<InfoBox>
+				This beta currently uses operator-issued access links rather than passwords.
+			</InfoBox>
 			<div class="actions">
-				<a href="/tasks">Continue</a>
-				<button type="button" class="ghost" on:click={signOut} disabled={loggingOut}>
+				<Button variant="primary" on:click={() => goto('/tasks')}>Continue</Button>
+				<Button variant="secondary" on:click={signOut} disabled={loggingOut}>
 					{loggingOut ? 'Signing out…' : 'Sign out'}
-				</button>
+				</Button>
 			</div>
 		{:else}
-			<p>Open the one-time beta access link from the operator on this browser to sign in.</p>
-			<p>If your last link expired or was already used, ask the operator for a new one.</p>
+			<p class="lede">
+				Open the one-time beta access link from the operator on this browser to sign in.
+			</p>
+			<InfoBox>
+				If your last link expired or was already used, ask the operator for a new one.
+			</InfoBox>
+			<form class="token-form" on:submit|preventDefault={submitToken}>
+				<Input
+					id="access-token"
+					label="Beta access token"
+					placeholder="Paste your access link or token"
+					required
+					bind:value={tokenInput}
+					error={pageError ? ' ' : ''}
+				/>
+				<Button variant="primary" type="submit" disabled={exchanging} fullWidth>
+					{exchanging ? 'Signing in…' : 'Sign in'}
+				</Button>
+			</form>
 		{/if}
+
 		{#if pageError}
-			<p class="error">{pageError}</p>
+			<p class="error-banner" role="alert">{pageError}</p>
 		{/if}
 	</section>
 </div>
@@ -80,47 +127,75 @@
 		min-height: 100vh;
 		display: grid;
 		place-items: center;
-		padding: 2rem;
+		padding: var(--space-6) var(--space-5);
 	}
+
 	.card {
-		max-width: 38rem;
-		padding: 2rem;
-		border-radius: 1.5rem;
-		background: white;
-		box-shadow: 0 18px 45px rgba(24, 34, 47, 0.08);
+		width: 100%;
+		max-width: var(--surface-max-width);
+		padding: var(--space-8) var(--space-6);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-3xl);
+		box-shadow: var(--shadow-md);
 	}
+
 	.eyebrow {
-		margin: 0 0 0.75rem;
-		font-size: 0.875rem;
-		font-weight: 700;
-		letter-spacing: 0.14em;
+		font-size: 11px;
+		letter-spacing: 0.18em;
 		text-transform: uppercase;
-		color: #2a6df4;
+		color: var(--primary-2);
+		font-weight: 600;
+		margin-bottom: var(--space-3);
 	}
+
+	.display {
+		font-family: var(--font-display);
+		font-size: 34px;
+		line-height: 1.1;
+		letter-spacing: -0.005em;
+		color: var(--ink);
+		font-weight: 400;
+		margin-bottom: var(--space-4);
+	}
+
+	.lede {
+		font-size: 15.5px;
+		color: var(--ink-2);
+		line-height: 1.6;
+		margin-bottom: var(--space-4);
+	}
+
+	.token-form {
+		display: grid;
+		gap: var(--space-4);
+		margin-top: var(--space-4);
+	}
+
 	.actions {
 		display: flex;
-		gap: 1rem;
-		margin-top: 1rem;
-		align-items: center;
+		gap: var(--space-4);
+		margin-top: var(--space-4);
+		min-width: 0;
 	}
-	.actions a,
-	button {
-		padding: 0.85rem 1.15rem;
-		border-radius: 999px;
-		text-decoration: none;
+
+	.error-banner {
+		color: var(--rose);
 		font-weight: 600;
-		border: none;
-		background: #18222f;
-		color: white;
-		cursor: pointer;
+		padding: var(--space-4);
+		border-radius: var(--radius-lg);
+		background: var(--rose-soft);
+		margin-top: var(--space-4);
 	}
-	button.ghost {
-		background: white;
-		color: #18222f;
-		border: 1px solid #cbd5e1;
-	}
-	.error {
-		margin-top: 1rem;
-		color: #b42318;
+
+	@media (max-width: 540px) {
+		.card {
+			padding: var(--space-6) var(--space-4);
+			border-radius: var(--radius-2xl);
+		}
+
+		.actions {
+			flex-direction: column;
+		}
 	}
 </style>
