@@ -1,0 +1,17 @@
+{
+  "note": "",
+  "candidates": [
+    {
+      "text": "A scheduler should compute target dates for recurring tasks inside a planning horizon and only generate day-candidates for the current planning day, so recurring work spreads across available days instead of piling onto the first day.",
+      "confidence": "high",
+      "sources": ["story issue", "review finding"],
+      "rationale": "Story 017 was triggered by Laundry, Meal prep, Grocery, and Clean kitchen all competing on day 1 and cascading forward. The fix replaced an 'every due task is due today' check with horizon-aware target dates, which is the central reusable insight from this story."
+    },
+    {
+      "text": "When scheduling recurring work of the same priority, prefer more-frequent tasks (e.g., daily) over less-frequent tasks (e.g., weekly) so daily commitments are protected and less-frequent tasks only claim leftover budget or honestly overflow.",
+      "confidence": "medium",
+      "sources": ["story issue", "review finding"],
+      "rationale": "Story 017 verification required that a daily task never force other tasks to overflow if they can be placed on other days. The review also flagged the need for a focused test proving daily tasks win under budget pressure."
+    }
+  ]
+}
