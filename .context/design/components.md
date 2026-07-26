@@ -27,6 +27,12 @@
 - Props: `title` (optional)
 - Use: Inline informational or contextual notes with an icon and a text slot.
 
+## SummaryBox
+<!-- source: story-023 -->
+- Location: `web/src/lib/components/design/SummaryBox.svelte`
+- Props: `id`, `value`, `unit`, `hint`
+- Use: Highlight a numeric value with a unit and a short hint, such as a budget preview.
+
 ## OnboardingShell
 <!-- source: story-021 -->
 - Location: `web/src/lib/components/OnboardingShell.svelte`

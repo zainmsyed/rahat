@@ -81,8 +81,9 @@ describe('ProfilePage', () => {
 		await fireEvent.input(emailInput, { target: { value: 'alex@example.com' } });
 		await fireEvent.input(slider, { target: { value: '90' } });
 
-		expect(screen.getByText('90')).toBeInTheDocument();
-		expect(screen.getByText('minutes per day')).toBeInTheDocument();
+		const summary = screen.getByRole('status');
+		expect(summary).toHaveTextContent('90');
+		expect(summary).toHaveTextContent('minutes per day');
 
 		const saveButton = screen.getByRole('button', { name: /Save and continue/i });
 		await fireEvent.click(saveButton);
@@ -96,6 +97,33 @@ describe('ProfilePage', () => {
 			})
 		);
 		expect(mockGoto).toHaveBeenCalledWith('/onboarding/telegram');
+	});
+
+	it('pre-fills the form from an existing profile', async () => {
+		getState.mockResolvedValue({
+			has_profile: true,
+			telegram_linked: false,
+			calendar_connected: false,
+			tasks: [],
+			starter_templates: [],
+			user: {
+				display_name: 'Jordan',
+				timezone: 'Europe/London',
+				daily_time_budget_minutes: 120,
+				email: 'jordan@example.com'
+			}
+		});
+
+		render(ProfilePage);
+		await waitFor(() => expect(screen.getByLabelText('Name *')).toHaveValue('Jordan'));
+
+		expect(screen.getByLabelText('Timezone *')).toHaveValue('Europe/London');
+		expect(screen.getByLabelText('Email for recaps (optional)')).toHaveValue(
+			'jordan@example.com'
+		);
+		const summary = screen.getByRole('status');
+		expect(summary).toHaveTextContent('120');
+		expect(summary).toHaveTextContent('minutes per day');
 	});
 
 	it('shows validation errors and does not submit when required fields are invalid', async () => {

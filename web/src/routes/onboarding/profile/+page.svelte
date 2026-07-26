@@ -4,6 +4,7 @@
 	import OnboardingShell from '$lib/components/OnboardingShell.svelte';
 	import Input from '$lib/components/design/Input.svelte';
 	import Button from '$lib/components/design/Button.svelte';
+	import SummaryBox from '$lib/components/design/SummaryBox.svelte';
 	import {
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
@@ -147,20 +148,19 @@
 					max="480"
 					step="15"
 					bind:value={profileDraft.daily_time_budget_minutes}
-					aria-describedby="budget-summary budget-hint"
+					aria-describedby="budget-summary budget-summary-hint"
 				/>
 				<div class="slider-ticks" aria-hidden="true">
 					{#each budgetTicks as tick}
 						<span>{tick}</span>
 					{/each}
 				</div>
-				<div id="budget-summary" class="summary-box" role="status" aria-live="polite">
-					<span class="budget-value">{profileDraft.daily_time_budget_minutes}</span>
-					<span class="budget-unit">minutes per day</span>
-					<span id="budget-hint" class="budget-hint">
-						Friendly default: 45 minutes. Move the slider to change it.
-					</span>
-				</div>
+				<SummaryBox
+					id="budget-summary"
+					value={profileDraft.daily_time_budget_minutes}
+					unit="minutes per day"
+					hint="Friendly default: 45 minutes. Move the slider to change it."
+				/>
 				{#if profileErrors.daily_time_budget_minutes}
 					<p class="error-text">{profileErrors.daily_time_budget_minutes}</p>
 				{/if}
@@ -293,34 +293,6 @@
 		font-size: 12px;
 		color: var(--ink-3);
 		padding: 0 4px;
-	}
-
-	.summary-box {
-		display: grid;
-		gap: var(--space-1);
-		justify-items: start;
-		padding: var(--space-5);
-		background: var(--primary-bg);
-		border: 1px solid var(--primary-soft);
-		border-radius: var(--radius-lg);
-	}
-
-	.budget-value {
-		font-family: var(--font-display);
-		font-size: 60px;
-		line-height: 1;
-		color: var(--primary-2);
-	}
-
-	.budget-unit {
-		font-size: 15px;
-		font-weight: 500;
-		color: var(--ink-2);
-	}
-
-	.budget-hint {
-		font-size: 13px;
-		color: var(--ink-3);
 	}
 
 	.error-text {
