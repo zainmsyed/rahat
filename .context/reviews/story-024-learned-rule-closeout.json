@@ -1,0 +1,17 @@
+{
+  "note": "Two reusable rule candidates emerged from the review findings; no fallow or complaint signal was present.",
+  "candidates": [
+    {
+      "text": "When a page redesign requires changes to a shared design component, update that component's tests to cover the new behavior and record any new props in the component registry.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "The tasks redesign forced `Input.svelte` to accept numeric values and `min`/`max` props, but those changes were initially untested and unregistered. Adding tests and updating `components.md` prevents shared-component drift."
+    },
+    {
+      "text": "If the design system requires full visual control over dropdown menus, use a custom Select component instead of a native `<select>`.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "Native `<select>` open menus are rendered by the browser/OS and cannot be fully themed. The task editor's closed select matched the design system, but the open menu did not, which was only resolved by accepting the platform limitation."
+    }
+  ]
+}

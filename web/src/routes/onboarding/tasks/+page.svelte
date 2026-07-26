@@ -138,7 +138,6 @@
 	}
 
 	function starterSubtitle(template: {
-		description: string;
 		duration_minutes: number;
 		cadence_type: 'interval' | 'count';
 		cadence_value: number;

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import Input from './Input.svelte';
 
 describe('Input', () => {
@@ -19,5 +19,33 @@ describe('Input', () => {
 		render(Input, { props: { id: 'code', label: 'Invite code', error: 'Required' } });
 		expect(screen.getByText('Required')).toBeInTheDocument();
 		expect(screen.getByRole('textbox')).toHaveClass('error');
+	});
+
+	it('renders a numeric value and min/max attributes', () => {
+		render(Input, {
+			props: {
+				id: 'budget',
+				label: 'Budget',
+				type: 'number',
+				value: 45,
+				min: 15,
+				max: 480
+			}
+		});
+
+		const input = screen.getByRole('spinbutton') as HTMLInputElement;
+		expect(input).toHaveValue(45);
+		expect(input).toHaveAttribute('min', '15');
+		expect(input).toHaveAttribute('max', '480');
+	});
+
+	it('updates a numeric value on input', async () => {
+		render(Input, {
+			props: { id: 'budget', label: 'Budget', type: 'number', value: 45 }
+		});
+
+		const input = screen.getByRole('spinbutton') as HTMLInputElement;
+		await fireEvent.input(input, { target: { value: '90' } });
+		expect(input).toHaveValue(90);
 	});
 });
