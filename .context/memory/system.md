@@ -32,8 +32,8 @@
 - Dev-only token or admin helper endpoints should default off outside explicit local development and require an opt-in flag when enabled. <!-- source: story-009 --> <!-- confidence: low — no signal in last 5 stories -->
 - When backing up SQLite in WAL mode, do not copy only the main .sqlite3 file; create a WAL-safe snapshot or checkpointed backup and verify it can be restored cleanly. <!-- source: story-011 --> <!-- confidence: low — no signal in last 5 stories -->
 - Batch jobs that fan out across users must derive day/window context from each user's timezone and return a machine-detectable failure when any user-level work fails. <!-- source: story-011 --> <!-- confidence: low — no signal in last 5 stories -->
-- CLI/operator commands that print machine-readable payloads should reserve stdout for the payload and send runtime logs to stderr or suppress unrelated initialization logs. <!-- source: story-012 --> <!-- confidence: high -->
-- Protected endpoints must derive user ownership from the authenticated session or verified initiation state, not from raw user_id request parameters. <!-- source: story-012 --> <!-- confidence: high -->
+- CLI/operator commands that print machine-readable payloads should reserve stdout for the payload and send runtime logs to stderr or suppress unrelated initialization logs. <!-- source: story-012 --> <!-- confidence: low — no signal in last 5 stories -->
+- Protected endpoints must derive user ownership from the authenticated session or verified initiation state, not from raw user_id request parameters. <!-- source: story-012 --> <!-- confidence: low — no signal in last 5 stories -->
 - Never destructively replace child records referenced by historical data; preserve stable IDs or version/archive the records, and test history retention through edits. <!-- source: story-013 --> <!-- confidence: high -->
 - Every state-changing endpoint authenticated by a browser cookie must enforce the shared trusted-origin or CSRF policy and test trusted, missing, and mismatched origins. <!-- source: story-013 --> <!-- confidence: high -->
 - When an HTTP response selects Access-Control-Allow-Origin based on the request Origin, always include a Vary: Origin header. <!-- source: story-014 --> <!-- confidence: high -->
@@ -43,3 +43,5 @@
 ### From successes
 - When a scheduler splits a daily time budget across windows, it should allocate demand exactly when total candidate demand fits the daily budget rather than enforcing an artificial proportional split that can reject feasible combinations. <!-- source: story-016 --> <!-- confidence: high -->
 - When falling back from a preferred time window, prefer the nearest window before jumping to a distant one. <!-- source: story-016 --> <!-- confidence: high -->
+- A scheduler should compute target dates for recurring tasks inside a planning horizon and only generate day-candidates for the current planning day, so recurring work spreads across available days instead of piling onto the first day. <!-- source: story-017 --> <!-- confidence: high -->
+- When scheduling recurring work of the same priority, prefer more-frequent tasks (e.g., daily) over less-frequent tasks (e.g., weekly) so daily commitments are protected and less-frequent tasks only claim leftover budget or honestly overflow. <!-- source: story-017 --> <!-- confidence: high -->
