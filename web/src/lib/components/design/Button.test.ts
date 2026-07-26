@@ -32,4 +32,11 @@ describe('Button', () => {
 		await fireEvent.click(button);
 		expect(onClick).toHaveBeenCalledTimes(1);
 	});
+
+	it('renders an anchor when href is provided', () => {
+		render(Button, { props: { variant: 'primary', href: '/tasks' } });
+		const link = screen.getByRole('link');
+		expect(link).toHaveAttribute('href', '/tasks');
+		expect(link).toHaveClass('btn-primary');
+	});
 });

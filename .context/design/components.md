@@ -6,8 +6,8 @@
 ## Button
 <!-- source: story-020 -->
 - Location: `web/src/lib/components/design/Button.svelte`
-- Props: `variant: 'primary' | 'secondary' | 'text'`, `type`, `disabled`, `fullWidth`
-- Use: Primary actions, secondary actions, and low-emphasis text links.
+- Props: `variant: 'primary' | 'secondary' | 'text'`, `type`, `disabled`, `fullWidth`, `href`
+- Use: Primary actions, secondary actions, and low-emphasis text links. When `href` is provided, the component renders as an anchor with button styling.
 
 ## Toggle
 <!-- source: story-028 -->

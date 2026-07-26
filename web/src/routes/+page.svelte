@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/design/Button.svelte';
 </script>
 
 <svelte:head>
@@ -15,7 +16,7 @@
 			then let Rahat keep the schedule current.
 		</p>
 		<div class="actions">
-			<a class="cta" href="/tasks">Manage routines</a>
+			<Button variant="primary" href="/tasks" fullWidth>Manage routines</Button>
 		</div>
 	</div>
 </main>
@@ -38,30 +39,5 @@
 
 	.actions {
 		margin-top: var(--space-2);
-	}
-
-	.cta {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 100%;
-		padding: 15px 20px;
-		border: none;
-		border-radius: var(--radius-lg);
-		background: var(--primary);
-		color: white;
-		font-size: 15px;
-		font-weight: 600;
-		letter-spacing: 0.01em;
-		text-decoration: none;
-		box-shadow: var(--shadow-button);
-		transition: all 0.2s var(--ease-out);
-		cursor: pointer;
-	}
-
-	.cta:hover {
-		background: var(--primary-2);
-		transform: translateY(-1px);
-		box-shadow: var(--shadow-button-hover);
 	}
 </style>

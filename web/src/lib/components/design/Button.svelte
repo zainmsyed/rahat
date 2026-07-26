@@ -3,22 +3,37 @@
 	export let type: 'button' | 'submit' | 'reset' = 'button';
 	export let disabled = false;
 	export let fullWidth = false;
+	export let href = '';
 </script>
 
-<button
-	{type}
-	{disabled}
-	class:btn-primary={variant === 'primary'}
-	class:btn-secondary={variant === 'secondary'}
-	class:btn-text={variant === 'text'}
-	class:full-width={fullWidth}
-	on:click
->
-	<slot />
-</button>
+{#if href && !disabled}
+	<a
+		{href}
+		class:btn-primary={variant === 'primary'}
+		class:btn-secondary={variant === 'secondary'}
+		class:btn-text={variant === 'text'}
+		class:full-width={fullWidth}
+		on:click
+	>
+		<slot />
+	</a>
+{:else}
+	<button
+		{type}
+		{disabled}
+		class:btn-primary={variant === 'primary'}
+		class:btn-secondary={variant === 'secondary'}
+		class:btn-text={variant === 'text'}
+		class:full-width={fullWidth}
+		on:click
+	>
+		<slot />
+	</button>
+{/if}
 
 <style>
-	button {
+	button,
+	a {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -33,6 +48,7 @@
 		letter-spacing: 0.01em;
 		transition: all 0.2s var(--ease-out);
 		min-width: 200px;
+		text-decoration: none;
 	}
 
 	button:disabled {
