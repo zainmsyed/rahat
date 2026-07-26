@@ -16,21 +16,29 @@ var (
 )
 
 func StartTime(date time.Time, windowName string) time.Time {
+	loc := date.Location()
+	if loc == nil {
+		loc = time.UTC
+	}
 	for _, window := range Windows {
 		if window.Name == windowName {
-			return time.Date(date.Year(), date.Month(), date.Day(), window.Start, 0, 0, 0, time.UTC)
+			return time.Date(date.Year(), date.Month(), date.Day(), window.Start, 0, 0, 0, loc)
 		}
 	}
-	return time.Date(date.Year(), date.Month(), date.Day(), Morning.Start, 0, 0, 0, time.UTC)
+	return time.Date(date.Year(), date.Month(), date.Day(), Morning.Start, 0, 0, 0, loc)
 }
 
 func EndTime(date time.Time, windowName string) time.Time {
+	loc := date.Location()
+	if loc == nil {
+		loc = time.UTC
+	}
 	for _, window := range Windows {
 		if window.Name == windowName {
-			return time.Date(date.Year(), date.Month(), date.Day(), window.End, 0, 0, 0, time.UTC)
+			return time.Date(date.Year(), date.Month(), date.Day(), window.End, 0, 0, 0, loc)
 		}
 	}
-	return time.Date(date.Year(), date.Month(), date.Day(), Evening.End, 0, 0, 0, time.UTC)
+	return time.Date(date.Year(), date.Month(), date.Day(), Evening.End, 0, 0, 0, loc)
 }
 
 func WindowForTime(date, value time.Time) (string, bool) {

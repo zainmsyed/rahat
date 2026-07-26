@@ -3,6 +3,7 @@ package scheduler_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -900,6 +901,92 @@ func TestSchedulerSpreadsRecurringTasksAcrossWeek(t *testing.T) {
 	}
 	if totalOverflowed == 0 {
 		t.Fatal("expected honest overflow for work that cannot fit anywhere in the horizon")
+	}
+}
+
+func TestSchedulerTimezoneAware(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		timezone     string
+		day          time.Time
+		wantDateStr  string
+		wantReadyHour int
+	}{
+		{
+			name:         "America/Chicago user gets local date and morning ready time",
+			timezone:     "America/Chicago",
+			day:          time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
+			wantDateStr:  "2026-07-25",
+			wantReadyHour: 8,
+		},
+		{
+			name:         "Asia/Tokyo user gets local date and morning ready time",
+			timezone:     "Asia/Tokyo",
+			day:          time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
+			wantDateStr:  "2026-07-25",
+			wantReadyHour: 8,
+		},
+		{
+			name:         "UTC user is unchanged",
+			timezone:     "UTC",
+			day:          time.Date(2026, 7, 25, 0, 0, 0, 0, time.UTC),
+			wantDateStr:  "2026-07-25",
+			wantReadyHour: 8,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			sqlDB := openTestDB(t)
+			if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+				t.Fatalf("ApplyMigrations() error = %v", err)
+			}
+
+			userService := users.NewService(users.NewRepository(sqlDB))
+			taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+			occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+			checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+			blockRepo := store.NewCalendarBlockRepository(sqlDB)
+			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+			user, err := userService.Create(ctx, users.User{DisplayName: "TZ", Timezone: tt.timezone, DailyTimeBudgetMinutes: 60})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Morning routine", DurationMinutes: 15, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := svc.PlanDay(ctx, user.ID, tt.day)
+			if err != nil {
+				t.Fatalf("PlanDay() error = %v", err)
+			}
+			if result.Date != tt.wantDateStr {
+				t.Fatalf("result.Date = %s, want %s", result.Date, tt.wantDateStr)
+			}
+			if len(result.Scheduled) != 1 {
+				t.Fatalf("len(Scheduled) = %d, want 1", len(result.Scheduled))
+			}
+			readyAt := result.Scheduled[0].ReadyAt
+			if readyAt == nil {
+				t.Fatal("ReadyAt is nil")
+			}
+			loc, err := time.LoadLocation(tt.timezone)
+			if err != nil {
+				t.Fatal(err)
+			}
+			localReady := readyAt.In(loc)
+			if localReady.Hour() != tt.wantReadyHour {
+				t.Fatalf("local ready hour = %d, want %d (readyAt=%s)", localReady.Hour(), tt.wantReadyHour, readyAt)
+			}
+			if y, m, d := localReady.Date(); fmt.Sprintf("%04d-%02d-%02d", y, m, d) != tt.wantDateStr {
+				t.Fatalf("local ready date = %04d-%02d-%02d, want %s", y, m, d, tt.wantDateStr)
+			}
+		})
 	}
 }
 

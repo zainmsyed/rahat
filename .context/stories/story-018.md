@@ -1,9 +1,9 @@
 # Story 018: Make the scheduler timezone-aware
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature / bug-fix  
 **Created:** 2026-07-25  
-**Last accessed:** 2026-07-25  
+**Last accessed:** 2026-07-26  
 **Completed:** —
 
 ---
@@ -43,12 +43,28 @@ The Story 015 review caught both issues in the Telegram confirmation message. Fi
 - Story 017
 
 ## Checklist
-- [ ] Identify all places where UTC is used as the scheduling anchor
-- [ ] Introduce timezone-aware date and window calculations
-- [ ] Add tests for users in timezones ahead of, behind, and near UTC
-- [ ] Update any callers that assume UTC-midnight plan dates
-- [ ] Ensure existing scheduler tests still pass
+- [x] Identify all places where UTC is used as the scheduling anchor
+- [x] Introduce timezone-aware date and window calculations
+- [x] Add tests for users in timezones ahead of, behind, and near UTC
+- [x] Update any callers that assume UTC-midnight plan dates
+- [x] Ensure existing scheduler tests still pass
 
 ## Issues
 
 ## Completion Summary
+
+Made the scheduler timezone-aware by changing how plan dates and window boundaries are resolved:
+
+1. **`internal/time/windows.go`**: `StartTime`, `EndTime`, and `WindowForTime` now build times in the caller-provided location instead of UTC. This makes "morning" 8:00 AM in the user's local clock.
+
+2. **`internal/scheduler/service.go`**:
+   - Added `localDayInTimezone` to convert the incoming UTC-midnight plan date into a true local-midnight time in the user's timezone.
+   - `PlanDay` and `previewDayWithOccurrences` now compute `planDate` from the user's timezone, so the date string, week start, target dates, and window times are all anchored to the user's local calendar day.
+   - `startOfWeek` now preserves the timezone when computing the Monday boundary.
+   - Overflow and checkpoint dates are derived from the local day.
+
+3. **`internal/scheduler/service_test.go`**: Added `TestSchedulerTimezoneAware` with subtests for `America/Chicago`, `Asia/Tokyo`, and `UTC`, asserting that the returned `PlanResult.Date` matches the local calendar day and that a morning task's `ReadyAt` is 8:00 AM local time.
+
+Callers (`localDateAsUTC` in onboarding and lookahead, and `parseDay` in the schedule endpoints) already pass a UTC-midnight instant that represents the intended local date, so no changes were needed beyond making the scheduler interpret that instant correctly.
+
+All existing scheduler tests, `go test ./...`, and `npm test` pass. No migrations were needed.

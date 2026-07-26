@@ -35,6 +35,15 @@ func NewService(usersService *users.Service, tasksService *tasks.Service, occurr
 	}
 }
 
+func localDayInTimezone(day time.Time, timezone string) (time.Time, error) {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("load timezone %q: %w", timezone, err)
+	}
+	utcDay := day.UTC()
+	return time.Date(utcDay.Year(), utcDay.Month(), utcDay.Day(), 0, 0, 0, 0, loc), nil
+}
+
 func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (PlanResult, error) {
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
@@ -49,7 +58,10 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 		return PlanResult{}, fmt.Errorf("load occurrences: %w", err)
 	}
 
-	planDate := day.UTC()
+	planDate, err := localDayInTimezone(day, user.Timezone)
+	if err != nil {
+		return PlanResult{}, fmt.Errorf("resolve plan date: %w", err)
+	}
 	planDateStr := store.FormatDate(planDate)
 	backlog, current, history := splitOccurrences(allOccurrences, planDateStr)
 	calendarBlocks, err := s.blocks.ListByUserAndDate(ctx, userID, planDateStr)
@@ -83,7 +95,7 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 
 	persistedOverflowed := make([]occurrences.Occurrence, 0, len(overflowed))
 	for _, candidate := range overflowed {
-		nextDay := planDate.Add(24 * time.Hour)
+		nextDay := planDate.AddDate(0, 0, 1)
 		candidate.Occurrence.Status = occurrences.StatusPending
 		candidate.Occurrence.ScheduledForDate = store.FormatDate(nextDay)
 		candidate.Occurrence.ScheduledTimeOfDay = candidate.Window
@@ -182,7 +194,10 @@ func (s *Service) loadPreviewInputs(ctx context.Context, userID string) (users.U
 }
 
 func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User, taskDefs []tasks.TaskWithSubtasks, allOccurrences []occurrences.Occurrence, day time.Time) (PlanResult, []occurrences.Occurrence, error) {
-	planDate := day.UTC()
+	planDate, err := localDayInTimezone(day, user.Timezone)
+	if err != nil {
+		return PlanResult{}, nil, fmt.Errorf("resolve plan date: %w", err)
+	}
 	planDateStr := store.FormatDate(planDate)
 	backlog, current, history := splitOccurrences(allOccurrences, planDateStr)
 	calendarBlocks, err := s.blocks.ListByUserAndDate(ctx, user.ID, planDateStr)
@@ -213,7 +228,7 @@ func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User
 	for _, candidate := range overflowed {
 		occurrence := candidate.Occurrence
 		occurrence.Status = occurrences.StatusPending
-		occurrence.ScheduledForDate = store.FormatDate(planDate.Add(24 * time.Hour))
+		occurrence.ScheduledForDate = store.FormatDate(planDate.AddDate(0, 0, 1))
 		occurrence.ScheduledTimeOfDay = candidate.Window
 		occurrence.RolloverCount++
 		previewOverflowed = append(previewOverflowed, occurrence)
@@ -634,7 +649,11 @@ func startOfWeek(day time.Time) time.Time {
 	if weekday == 0 {
 		weekday = 7
 	}
-	return time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -(weekday - 1))
+	loc := day.Location()
+	if loc == nil {
+		loc = time.UTC
+	}
+	return time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -(weekday - 1))
 }
 
 func splitWindowBudgets(total int, candidates []scheduledCandidate, constraints calendarConstraints) map[string]int {
