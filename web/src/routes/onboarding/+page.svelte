@@ -2,6 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import OnboardingShell from '$lib/components/OnboardingShell.svelte';
+	import Button from '$lib/components/design/Button.svelte';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
+	import Input from '$lib/components/design/Input.svelte';
 	import {
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
@@ -19,7 +22,13 @@
 	let loading = true;
 	let inviteCode = '';
 	let pageError = '';
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = {
+		has_profile: false,
+		telegram_linked: false,
+		calendar_connected: false,
+		tasks: [],
+		starter_templates: []
+	};
 
 	$: steps = buildOnboardingSteps(state, false);
 
@@ -63,6 +72,11 @@
 			loading = false;
 		}
 	}
+
+	function handleSubmit(event: Event) {
+		event.preventDefault();
+		startSession();
+	}
 </script>
 
 {#if loading}
@@ -71,27 +85,29 @@
 	<OnboardingShell
 		{steps}
 		currentStep={0}
-		title="Let's set up your first calm, clear plan."
-		intro="Each step explains exactly what to do next. Required items are labeled, and the email field later in setup is optional."
+		title="Start with your invite code"
+		intro="If you opened a setup link, Rahat starts automatically. Otherwise, type the invite code you received and press the button."
 	>
-		<section class="panel active">
-			<p class="label">Step 1 · Required</p>
-			<h2>Start with your invite code</h2>
-			<p>If you opened a setup link, Rahat starts automatically. Otherwise, type the invite code you received and press the button.</p>
+		<form class="invite-form" on:submit={handleSubmit}>
+			<Input
+				id="inviteCode"
+				label="Invite code"
+				placeholder="Example: rahat-beta"
+				bind:value={inviteCode}
+				required
+				error={pageError}
+			/>
 
-			<label>
-				<span>Invite code *</span>
-				<input bind:value={inviteCode} placeholder="Example: rahat-beta" />
-			</label>
+			<Button type="submit" variant="primary" fullWidth>
+				{loading ? 'Starting…' : 'Start onboarding'}
+			</Button>
+		</form>
 
-			{#if pageError}
-				<p class="error-banner">{pageError}</p>
-			{/if}
-
-			<div class="actions">
-				<button type="button" on:click={startSession}>Start onboarding</button>
-			</div>
-		</section>
+		<div class="help">
+			<InfoBox title="Where do I get a code?">
+				Your onboarding operator sent it to you. It usually looks like <strong>rahat-beta</strong>.
+			</InfoBox>
+		</div>
 	</OnboardingShell>
 {/if}
 
@@ -100,55 +116,16 @@
 		min-height: 100vh;
 		display: grid;
 		place-items: center;
-		font-size: 1.1rem;
+		font-size: 15.5px;
+		color: var(--ink-2);
 	}
 
-	.panel {
+	.invite-form {
 		display: grid;
-		gap: 1rem;
-		border: 2px solid #d6e4ff;
+		gap: var(--space-5);
 	}
 
-	label {
-		display: grid;
-		gap: 0.4rem;
-		font-weight: 600;
-	}
-
-	span {
-		font-size: 0.95rem;
-	}
-
-	input,
-	button {
-		font: inherit;
-	}
-
-	input {
-		padding: 0.8rem 0.9rem;
-		border-radius: 0.85rem;
-		border: 1px solid #cbd5e1;
-	}
-
-	button {
-		padding: 0.85rem 1.1rem;
-		border-radius: 999px;
-		border: none;
-		background: #2a6df4;
-		color: white;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	.actions {
-		display: flex;
-	}
-
-	.error-banner {
-		color: #b42318;
-		font-weight: 600;
-		padding: 0.9rem 1rem;
-		border-radius: 1rem;
-		background: #fff1f0;
+	.help {
+		margin-top: var(--space-6);
 	}
 </style>
