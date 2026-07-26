@@ -61,6 +61,16 @@ After onboarding persists routines and generates the first schedule, confirm the
 | 017 | Spread recurring tasks across days and weeks | planned | 003, 016 |
 | 018 | Make the scheduler timezone-aware | planned | 003, 017 |
 | 019 | Calendar-aware day selection and load balancing | planned | 005, 017, 018 |
+| 020 | Global design tokens and app shell | not-started | — |
+| 021 | Onboarding shell and stepper redesign | not-started | 020 |
+| 022 | Onboarding invite-code entry redesign | not-started | 020, 021 |
+| 023 | Onboarding profile page redesign | not-started | 020, 021 |
+| 024 | Onboarding tasks page and TaskEditor redesign | not-started | 020, 021 |
+| 025 | Onboarding connection pages redesign | not-started | 020, 021 |
+| 026 | Onboarding review page redesign | not-started | 020, 021, 023, 024, 025 |
+| 027 | Login page redesign | not-started | 020 |
+| 028 | Task management page redesign | not-started | 020 |
+| 029 | Lookahead and landing pages redesign | not-started | 020 |
 
 ## Replanning log
 - 2026-07-07: Initial plan created from the PRD plus clarified scope decisions: greenfield repo, Telegram as the interactive loop, email as recap-only, onboarding and read-only web view retained, SMS removed from v1.
@@ -73,3 +83,4 @@ After onboarding persists routines and generates the first schedule, confirm the
 - 2026-07-25: Replanned returning-user access after recognizing that operator-issued links do not provide a viable multi-tester recovery flow. Story 014 makes the uniquely linked Telegram chat the trusted self-service entry point: `/edit` resolves the backend user and issues a fresh short-lived, single-use link into the existing durable session system. Permanent invite/access links and frontend-supplied user identity are explicitly rejected.
 - 2026-07-25: Added Story 015 so onboarding has a visible outcome in the primary product channel. Successful completion will send one idempotent Telegram summary based on persisted routines and the actual first schedule, including honest overflow/skipped feedback and the `/edit` return instruction; on-screen completion remains available and Telegram delivery failure must not roll back saved onboarding data.
 - 2026-07-25: Replanned scheduler robustness after end-to-end testing showed the engine piles every newly-due task onto the first day and cascades overflow forward. Added Stories 016–019: 016 fixes the per-window budget split so feasible combinations fit; 017 spreads recurring tasks across days/weeks according to cadence and priority; 018 makes dates and windows timezone-aware; 019 uses calendar blocks to select lighter days and balance load. The scheduler is the core product for new and overwhelmed mothers, so these stories are sequenced to make it genuinely plan around her life.
+- 2026-07-26: Replanned UI work after reviewing the intake design references. Existing stories 001–019 are preserved as history. Added Stories 020–029 to apply the sage/cream design system (green primary `#7a9b76`, cream background, DM Serif + Outfit typography, 520 px centered cards, and named components) to every existing SvelteKit surface: global tokens and shell, onboarding flow, login, task management, lookahead, and landing page. No functional behavior or API contracts change; this is a visual redesign and component-alignment pass.
