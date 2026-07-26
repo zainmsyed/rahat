@@ -1,10 +1,10 @@
 # Story 023: Onboarding profile page redesign
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** feature  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-26  
-**Completed:** —
+**Completed:** 2026-07-26
 
 ---
 
