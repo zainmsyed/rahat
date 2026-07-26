@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
 	import TaskGroup from '$lib/components/tasks/TaskGroup.svelte';
+	import Button from '$lib/components/design/Button.svelte';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
 	import { emptyTaskDraft, type TaskDraft } from '$lib/api/onboarding';
 	import {
 		createTask,
@@ -97,95 +99,213 @@
 
 <div class="page">
 	<header class="topbar">
-		<a class="wordmark" href="/">Rah<span>at</span></a>
+		<a class="wordmark" href="/">Rahat<span>.</span></a>
 	</header>
 
-	<section class="hero">
+	<section class="hero card">
 		<p class="eyebrow">Routine care</p>
-		<h1>Keep your routines current.</h1>
-		<p>
-			Add, tune, pause, or remove routines here. Completed history stays intact; future schedule previews use only active routines.
+		<h1 class="display">Keep your routines current.</h1>
+		<p class="lede">
+			Add, tune, pause, or remove routines here. Completed history stays intact; future schedule
+			previews use only active routines.
 		</p>
-		<button on:click={startCreate}>Add a routine</button>
+		<Button variant="primary" on:click={startCreate}>Add a routine</Button>
 	</section>
 
 	{#if error}
-		<p class="notice error">{error}</p>
+		<p class="error-banner" role="alert">{error}</p>
 	{/if}
 
 	{#if mode !== 'list'}
-		<section class="panel">
+		<section class="editor card">
 			<p class="eyebrow">{mode === 'edit' ? 'Edit routine' : 'New routine'}</p>
-			<TaskEditor {draft} {saving} submitLabel={mode === 'edit' ? 'Save changes' : 'Create routine'} error={editorError} on:save={save} on:cancel={() => (mode = 'list')} />
+			<TaskEditor
+				{draft}
+				{saving}
+				submitLabel={mode === 'edit' ? 'Save changes' : 'Create routine'}
+				error={editorError}
+				on:save={save}
+				on:cancel={() => (mode = 'list')}
+			/>
 		</section>
 	{:else if loading}
-		<p class="notice">Loading routines…</p>
+		<InfoBox title="Loading routines…">One moment while we fetch your routines.</InfoBox>
 	{:else}
-		<TaskGroup title="Active" tasks={activeTasks} empty="No active routines yet." onEdit={startEdit} onAction={(type, task) => (confirmAction = { type, task })} />
-		<TaskGroup title="Paused" tasks={pausedTasks} empty="Paused routines will not create new schedule items." onEdit={startEdit} onAction={(type, task) => (confirmAction = { type, task })} />
-		<TaskGroup title="Removed" tasks={removedTasks} empty="Removed routines appear here after removal." onEdit={startEdit} onAction={(type, task) => (confirmAction = { type, task })} />
+		<TaskGroup
+			title="Active"
+			tasks={activeTasks}
+			empty="No active routines yet."
+			onEdit={startEdit}
+			onAction={(type, task) => (confirmAction = { type, task })}
+		/>
+		<TaskGroup
+			title="Paused"
+			tasks={pausedTasks}
+			empty="Paused routines will not create new schedule items."
+			onEdit={startEdit}
+			onAction={(type, task) => (confirmAction = { type, task })}
+		/>
+		<TaskGroup
+			title="Removed"
+			tasks={removedTasks}
+			empty="Removed routines appear here after removal."
+			onEdit={startEdit}
+			onAction={(type, task) => (confirmAction = { type, task })}
+		/>
 	{/if}
 </div>
 
 {#if confirmAction}
 	<div class="modal-backdrop" role="presentation">
-		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+		<div class="modal card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
 			<p class="eyebrow">Confirm</p>
-			<h2 id="confirm-title">{confirmAction.type === 'remove' ? 'Remove this routine?' : confirmAction.type === 'pause' ? 'Pause this routine?' : 'Resume this routine?'}</h2>
-			<p>
+			<h2 id="confirm-title" class="display-sm">
+				{confirmAction.type === 'remove'
+					? 'Remove this routine?'
+					: confirmAction.type === 'pause'
+						? 'Pause this routine?'
+						: 'Resume this routine?'}
+			</h2>
+			<p class="lede">
 				{#if confirmAction.type === 'remove'}
-					Rahat will hide it from active planning and stop creating future schedule items. Completed occurrences and event history are preserved.
+					Rahat will hide it from active planning and stop creating future schedule items.
+					Completed occurrences and event history are preserved.
 				{:else if confirmAction.type === 'pause'}
-					Rahat will stop creating new schedule items for this routine until you resume it. Existing completed history is not changed.
+					Rahat will stop creating new schedule items for this routine until you resume it.
+					Existing completed history is not changed.
 				{:else}
 					Rahat will include this routine in the next preview and future schedule runs again.
 				{/if}
 			</p>
-			<div class="actions">
-				<button class="ghost" on:click={() => (confirmAction = null)}>Cancel</button>
-				<button class:danger={confirmAction.type === 'remove'} on:click={confirmChange} disabled={saving}>{saving ? 'Working…' : 'Confirm'}</button>
+			<div class="modal-actions">
+				<Button variant="secondary" on:click={() => (confirmAction = null)}>Cancel</Button>
+				<Button
+					variant={confirmAction.type === 'remove' ? 'text' : 'primary'}
+					disabled={saving}
+					on:click={confirmChange}
+				>
+					{saving ? 'Working…' : 'Confirm'}
+				</Button>
 			</div>
 		</div>
 	</div>
 {/if}
 
 <style>
-	:global(:root) {
-		--rahat-primary: #7a9b76;
-		--rahat-primary-deep: #5a7a56;
-		--rahat-primary-glow: rgba(122, 155, 118, 0.22);
-		--rahat-rose: #b87a7a;
-		--rahat-bg: #faf7f2;
-		--rahat-surface-soft: #f4f0e6;
-		--rahat-paper: #ffffff;
-		--rahat-ink: #1f1d1a;
-		--rahat-ink-secondary: #4a4640;
-		--rahat-ink-muted: #8a8278;
-		--rahat-line: #e3dccc;
-		--rahat-line-soft: #ebe5d8;
-		--rahat-shadow-sm: 0 1px 2px rgba(31,29,26,.04), 0 4px 12px -4px rgba(31,29,26,.06);
-		--rahat-shadow-md: 0 2px 8px rgba(31,29,26,.05), 0 12px 32px -12px rgba(31,29,26,.08);
-		--rahat-overlay: rgba(31,29,26,.28);
+	.page {
+		max-width: 980px;
+		margin: 0 auto;
+		padding: var(--space-8) var(--space-5) var(--space-12);
 	}
-	:global(body) { margin: 0; font-family: Outfit, system-ui, sans-serif; background: var(--rahat-bg); color: var(--rahat-ink); }
-	.page { max-width: 980px; margin: 0 auto; padding: 32px 20px 48px; }
-	.topbar, .actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-	.wordmark { font-family: 'DM Serif Display', Georgia, serif; font-size: 24px; color: var(--rahat-ink); text-decoration: none; }
-	.wordmark span, .eyebrow { color: var(--rahat-primary-deep); }
-	.hero, .panel, .modal { background: var(--rahat-paper); border: 1px solid var(--rahat-line); border-radius: 20px; box-shadow: var(--rahat-shadow-md); }
-	.hero { margin: 24px 0; padding: 40px; display: grid; gap: 16px; }
-	.panel { padding: 24px; }
-	.eyebrow { margin: 0; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; }
-	h1 { margin: 0; font-family: 'DM Serif Display', Georgia, serif; font-size: clamp(32px, 6vw, 40px); line-height: 1.05; font-weight: 400; }
-	p { color: var(--rahat-ink-secondary); line-height: 1.6; }
-	button { border: 0; border-radius: 999px; background: var(--rahat-primary); color: var(--rahat-paper); padding: 12px 20px; font: inherit; font-weight: 700; cursor: pointer; }
-	button:hover { background: var(--rahat-primary-deep); }
-	button.ghost { background: transparent; color: var(--rahat-ink-secondary); border: 1.5px solid var(--rahat-line); }
-	button.danger { background: var(--rahat-rose); }
-	button:disabled { opacity: .65; cursor: wait; }
-	.notice { padding: 16px 20px; background: var(--rahat-surface-soft); border: 1px solid var(--rahat-line-soft); border-radius: 12px; }
-	.error { color: var(--rahat-rose); }
-	.modal-backdrop { position: fixed; inset: 0; background: var(--rahat-overlay); display: grid; place-items: center; padding: 20px; }
-	.modal { max-width: 440px; padding: 32px; }
-	@media (max-width: 700px) { .hero { padding: 24px; } }
+
+	.topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: var(--space-6);
+	}
+
+	.wordmark {
+		font-family: var(--font-display);
+		font-size: 24px;
+		color: var(--ink);
+		text-decoration: none;
+	}
+
+	.wordmark span {
+		color: var(--primary-2);
+	}
+
+	.card {
+		background: var(--paper);
+		border: 1.5px solid var(--line);
+		border-radius: var(--radius-2xl);
+		box-shadow: var(--shadow-md);
+	}
+
+	.hero {
+		margin: 0 0 var(--space-6);
+		padding: var(--space-8);
+		display: grid;
+		gap: var(--space-4);
+	}
+
+	.editor {
+		padding: var(--space-6);
+	}
+
+	.eyebrow {
+		margin: 0;
+		font-size: 11px;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		font-weight: 700;
+		color: var(--primary-2);
+	}
+
+	.display {
+		margin: 0;
+		font-family: var(--font-display);
+		font-size: clamp(32px, 6vw, 40px);
+		line-height: 1.05;
+		font-weight: 400;
+		color: var(--ink);
+	}
+
+	.display-sm {
+		margin: 0;
+		font-family: var(--font-display);
+		font-size: 28px;
+		line-height: 1.1;
+		font-weight: 400;
+		color: var(--ink);
+	}
+
+	.lede {
+		margin: 0;
+		font-size: 15.5px;
+		line-height: 1.6;
+		color: var(--ink-2);
+	}
+
+	.error-banner {
+		padding: var(--space-4) var(--space-5);
+		background: var(--rose-soft);
+		border: 1px solid var(--rose);
+		border-radius: var(--radius-lg);
+		color: var(--rose);
+		margin: 0 0 var(--space-6);
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(31, 29, 26, 0.28);
+		display: grid;
+		place-items: center;
+		padding: var(--space-5);
+		z-index: 100;
+	}
+
+	.modal {
+		width: 100%;
+		max-width: 440px;
+		padding: var(--space-8);
+		display: grid;
+		gap: var(--space-4);
+	}
+
+	.modal-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: var(--space-3);
+		margin-top: var(--space-2);
+	}
+
+	@media (max-width: 700px) {
+		.hero {
+			padding: var(--space-6);
+		}
+	}
 </style>

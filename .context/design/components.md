@@ -9,6 +9,12 @@
 - Props: `variant: 'primary' | 'secondary' | 'text'`, `type`, `disabled`, `fullWidth`
 - Use: Primary actions, secondary actions, and low-emphasis text links.
 
+## Toggle
+<!-- source: story-028 -->
+- Location: `web/src/lib/components/design/Toggle.svelte`
+- Props: `id`, `checked`, `label`
+- Use: Binary on/off control, such as pausing or resuming a routine.
+
 ## Input
 <!-- source: story-020 -->
 - Location: `web/src/lib/components/design/Input.svelte`

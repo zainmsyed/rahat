@@ -121,13 +121,13 @@ describe('task management page', () => {
 	it('confirms pause and resume actions before calling the API', async () => {
 		render(TasksPage);
 		await screen.findByText('Water plants');
-		await fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+		await fireEvent.click(screen.getByRole('switch', { name: 'Active' }));
 		let dialog = screen.getByRole('dialog');
 		expect(within(dialog).getByText('Pause this routine?')).toBeTruthy();
 		await fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
 		await waitFor(() => expect(setTaskPaused).toHaveBeenCalledWith('active-1', true));
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+		await fireEvent.click(screen.getByRole('switch', { name: 'Paused' }));
 		dialog = screen.getByRole('dialog');
 		await fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
 		await waitFor(() => expect(setTaskPaused).toHaveBeenCalledWith('paused-1', false));
@@ -159,7 +159,7 @@ describe('task management page', () => {
 		setTaskPaused.mockRejectedValueOnce(new Error('Could not pause routine'));
 		render(TasksPage);
 		await screen.findByText('Water plants');
-		await fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+		await fireEvent.click(screen.getByRole('switch', { name: 'Active' }));
 		await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }));
 		expect(await screen.findByText('Could not pause routine')).toBeTruthy();
 	});
