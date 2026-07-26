@@ -1001,6 +1001,106 @@ func TestSchedulerTimezoneAware(t *testing.T) {
 	}
 }
 
+func TestSchedulerCalendarAwareDaySelection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		seed           func(context.Context, *testing.T, *users.Service, *tasks.Service, *occurrences.Service, *store.CalendarBlockRepository) (string, string)
+		start          time.Time
+		wantGroceryDay string
+	}{
+		{
+			name: "grocery moves from afternoon-blocked day to free day",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, blockRepo *store.CalendarBlockRepository) (string, string) {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Calendar aware", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+				if err != nil {
+					t.Fatal(err)
+				}
+				grocery, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Grocery run", DurationMinutes: 60, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 7, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: grocery.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-28", OriginalScheduledForDate: "2026-07-28", ScheduledTimeOfDay: tasks.TimeOfDayAfternoon})
+				if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-08-04", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-1", LocalDate: "2026-08-04", Timezone: "UTC", Title: "Pediatrician", Classification: "medium", Window: "afternoon"}}); err != nil {
+					t.Fatal(err)
+				}
+				return user.ID, grocery.Task.ID
+			},
+			start:          time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC),
+			wantGroceryDay: "2026-08-05",
+		},
+		{
+			name: "heavy grocery moves from all-day event day to free day",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, blockRepo *store.CalendarBlockRepository) (string, string) {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Calendar aware", Timezone: "UTC", DailyTimeBudgetMinutes: 60})
+				if err != nil {
+					t.Fatal(err)
+				}
+				grocery, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Grocery run", DurationMinutes: 60, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 7, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: grocery.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-28", OriginalScheduledForDate: "2026-07-28", ScheduledTimeOfDay: tasks.TimeOfDayAfternoon})
+				if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-08-04", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-2", LocalDate: "2026-08-04", Timezone: "UTC", Title: "Family travel", Classification: "large", Window: "all-day", IsAllDay: true}}); err != nil {
+					t.Fatal(err)
+				}
+				return user.ID, grocery.Task.ID
+			},
+			start:          time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC),
+			wantGroceryDay: "2026-08-05",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			sqlDB := openTestDB(t)
+			if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+				t.Fatalf("ApplyMigrations() error = %v", err)
+			}
+
+			userService := users.NewService(users.NewRepository(sqlDB))
+			taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+			occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+			checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+			blockRepo := store.NewCalendarBlockRepository(sqlDB)
+			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+			userID, groceryID := tt.seed(ctx, t, userService, taskService, occurrenceService, blockRepo)
+
+			day1, err := svc.PlanDay(ctx, userID, tt.start)
+			if err != nil {
+				t.Fatalf("PlanDay(day1) error = %v", err)
+			}
+			for _, occ := range day1.Scheduled {
+				if occ.TaskID == groceryID {
+					t.Fatalf("grocery should not schedule on blocked day %s", day1.Date)
+				}
+			}
+			if _, ok := day1.Reasons[groceryID]; !ok {
+				t.Fatal("expected a day-selection reason on day 1")
+			}
+
+			day2, err := svc.PlanDay(ctx, userID, tt.start.AddDate(0, 0, 1))
+			if err != nil {
+				t.Fatalf("PlanDay(day2) error = %v", err)
+			}
+			var groceryDay string
+			for _, occ := range day2.Scheduled {
+				if occ.TaskID == groceryID {
+					groceryDay = day2.Date
+				}
+			}
+			if groceryDay != tt.wantGroceryDay {
+				t.Fatalf("grocery scheduled on %s, want %s", groceryDay, tt.wantGroceryDay)
+			}
+		})
+	}
+}
+
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB, err := db.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "rahat.sqlite3"))

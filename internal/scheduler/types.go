@@ -16,6 +16,7 @@ type PlanResult struct {
 	WindowBudgetsMinutes map[string]int
 	BlockedWindows       map[string][]string
 	SmallTaskOnlyReason  string
+	Reasons              map[string]string
 }
 
 type Clock interface {

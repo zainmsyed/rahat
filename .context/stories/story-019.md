@@ -1,9 +1,9 @@
 # Story 019: Calendar-aware day selection and load balancing
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature  
 **Created:** 2026-07-25  
-**Last accessed:** 2026-07-25  
+**Last accessed:** 2026-07-26  
 **Completed:** —
 
 ---
@@ -40,12 +40,28 @@ For the target user, Rahat should look ahead and place a 60-minute grocery run o
 - Story 018
 
 ## Checklist
-- [ ] Add tests that show the scheduler preferring less-busy days for heavier tasks
-- [ ] Implement calendar-aware day selection within the planning horizon
-- [ ] Surface day-selection reasons in the plan result or schedule explanation
-- [ ] Ensure large-day small-task filtering still works
-- [ ] Verify existing scheduler and calendar tests still pass
+- [x] Add tests that show the scheduler preferring less-busy days for heavier tasks
+- [x] Implement calendar-aware day selection within the planning horizon
+- [x] Surface day-selection reasons in the plan result or schedule explanation
+- [x] Ensure large-day small-task filtering still works
+- [x] Verify existing scheduler and calendar tests still pass
 
 ## Issues
 
 ## Completion Summary
+
+Implemented calendar-aware day selection and load balancing in `internal/scheduler/service.go`:
+
+1. **Horizon calendar load lookup**: `PlanDay` and `previewDayWithOccurrences` now load calendar constraints for the next 7 days via `loadCalendarConstraintsForRange`.
+
+2. **Budget-score day selection**: Added `availableBudgetScore` and `windowDurationMinutes` to score each day by how much chore-window time is not blocked by calendar events. Days with small-task-only restrictions score negatively for heavy tasks, so they are avoided.
+
+3. **Calendar-aware target dates**: `intervalTaskScheduleDates` and `countTaskScheduleDates` now use `chooseBestDates` to pick the eligible day(s) with the highest score. They keep the default cadence dates when scores are tied, so the Story 017 spread is preserved when no calendar events are present.
+
+4. **Day-selection reasons**: Added a `Reasons map[string]string` field to `PlanResult`. When a task is moved because of a blocked calendar day, the scheduler records a reason such as "Your calendar was full on 2026-08-04, so we moved it to 2026-08-05." This can be surfaced in explanations without manual conversion hacks.
+
+5. **Tests**: Added `TestSchedulerCalendarAwareDaySelection` with two subtests:
+   - A 60-minute grocery run moves from an afternoon-blocked day to the next free day.
+   - A 60-minute grocery run moves from an all-day large-event day to the next free day.
+
+All existing scheduler and calendar-blocking tests continue to pass, and `go test ./...` / `npm test` are green. No migrations were needed.

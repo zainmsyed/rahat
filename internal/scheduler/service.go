@@ -70,7 +70,14 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 	}
 	constraints := buildCalendarConstraints(calendarBlocks)
 
-	candidates, err := s.buildCandidates(ctx, tasksWithSubtasks, history, backlog, current, planDate)
+	horizonEnd := planDate.AddDate(0, 0, 6)
+	constraintsByDate, err := s.loadCalendarConstraintsForRange(ctx, userID, planDate, horizonEnd)
+	if err != nil {
+		return PlanResult{}, err
+	}
+	reasons := map[string]string{}
+
+	candidates, err := s.buildCandidates(ctx, tasksWithSubtasks, history, backlog, current, planDate, constraintsByDate, reasons)
 	if err != nil {
 		return PlanResult{}, err
 	}
@@ -144,6 +151,7 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 		WindowBudgetsMinutes: windowBudgets,
 		BlockedWindows:       constraints.BlockedWindows,
 		SmallTaskOnlyReason:  constraints.SmallTaskOnlyReason,
+		Reasons:              reasons,
 	}, nil
 }
 
@@ -206,7 +214,14 @@ func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User
 	}
 	constraints := buildCalendarConstraints(calendarBlocks)
 
-	candidates, err := s.buildCandidates(ctx, taskDefs, history, backlog, current, planDate)
+	horizonEnd := planDate.AddDate(0, 0, 6)
+	constraintsByDate, err := s.loadCalendarConstraintsForRange(ctx, user.ID, planDate, horizonEnd)
+	if err != nil {
+		return PlanResult{}, nil, err
+	}
+	reasons := map[string]string{}
+
+	candidates, err := s.buildCandidates(ctx, taskDefs, history, backlog, current, planDate, constraintsByDate, reasons)
 	if err != nil {
 		return PlanResult{}, nil, err
 	}
@@ -261,6 +276,7 @@ func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User
 		WindowBudgetsMinutes: windowBudgets,
 		BlockedWindows:       constraints.BlockedWindows,
 		SmallTaskOnlyReason:  constraints.SmallTaskOnlyReason,
+		Reasons:              reasons,
 	}
 	return result, applyPreviewResults(allOccurrences, previewScheduled, previewOverflowed, previewSkipped), nil
 }
@@ -275,7 +291,7 @@ type scheduledCandidate struct {
 	SortRank   int
 }
 
-func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWithSubtasks, history, backlog, current []occurrences.Occurrence, planDate time.Time) ([]scheduledCandidate, error) {
+func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWithSubtasks, history, backlog, current []occurrences.Occurrence, planDate time.Time, constraintsByDate map[string]calendarConstraints, reasons map[string]string) ([]scheduledCandidate, error) {
 	planDateStr := store.FormatDate(planDate)
 	openKeys := map[string]bool{}
 	openUnits := map[string]bool{}
@@ -298,7 +314,7 @@ func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWith
 		if taskDef.Task.IsPaused {
 			continue
 		}
-		if !taskScheduledOnDate(taskDef, history, planDateStr, planDate) {
+		if !taskScheduledOnDate(taskDef, history, planDateStr, planDate, constraintsByDate, reasons) {
 			continue
 		}
 
@@ -485,9 +501,9 @@ func effectiveWindow(taskDef tasks.Task, subtaskDef *tasks.Subtask) tasks.TimeOf
 	return tasks.TimeOfDayMorning
 }
 
-func taskScheduledOnDate(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDateStr string, planDate time.Time) bool {
+func taskScheduledOnDate(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDateStr string, planDate time.Time, constraintsByDate map[string]calendarConstraints, reasons map[string]string) bool {
 	horizonEnd := planDate.AddDate(0, 0, 6)
-	for _, d := range taskScheduleDates(taskDef, history, planDate, horizonEnd) {
+	for _, d := range taskScheduleDates(taskDef, history, planDate, horizonEnd, constraintsByDate, reasons) {
 		if d == planDateStr {
 			return true
 		}
@@ -498,47 +514,63 @@ func taskScheduledOnDate(taskDef tasks.TaskWithSubtasks, history []occurrences.O
 // taskScheduleDates returns the dates within [planDate, horizonEnd] on which a
 // recurring task should be considered for scheduling. It spreads count-based
 // and interval-based tasks across the available days instead of treating every
-// day in the window as due.
-func taskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time) []string {
+// day in the window as due, and it now prefers days with more calendar budget.
+func taskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time, constraintsByDate map[string]calendarConstraints, reasons map[string]string) []string {
 	switch taskDef.Task.CadenceType {
 	case tasks.CadenceTypeInterval:
-		return intervalTaskScheduleDates(taskDef, history, planDate, horizonEnd)
+		return intervalTaskScheduleDates(taskDef, history, planDate, horizonEnd, constraintsByDate, reasons)
 	case tasks.CadenceTypeCount:
-		return countTaskScheduleDates(taskDef, history, planDate, horizonEnd)
+		return countTaskScheduleDates(taskDef, history, planDate, horizonEnd, constraintsByDate, reasons)
 	default:
 		return nil
 	}
 }
 
-func intervalTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time) []string {
+func intervalTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time, constraintsByDate map[string]calendarConstraints, reasons map[string]string) []string {
 	cadence := taskDef.Task.CadenceValue
 	if cadence <= 0 {
 		cadence = 1
 	}
 
-	var target time.Time
+	var defaultTarget time.Time
 	if anchor, ok := latestAnchorDate(taskDef, history); ok {
-		target = anchor.AddDate(0, 0, cadence)
-		if target.Before(planDate) {
-			target = planDate
+		defaultTarget = anchor.AddDate(0, 0, cadence)
+		if defaultTarget.Before(planDate) {
+			defaultTarget = planDate
 		}
 	} else {
 		// Brand-new task: spread the first occurrence by task name so different
 		// weekly tasks land on different days instead of piling onto day one.
 		offset := taskNameHash(taskDef.Task.Name) % cadence
-		target = startOfWeek(planDate).AddDate(0, 0, offset)
-		for target.Before(planDate) {
-			target = target.AddDate(0, 0, cadence)
+		defaultTarget = startOfWeek(planDate).AddDate(0, 0, offset)
+		for defaultTarget.Before(planDate) {
+			defaultTarget = defaultTarget.AddDate(0, 0, cadence)
 		}
 	}
 
-	if target.After(horizonEnd) {
+	if defaultTarget.After(horizonEnd) {
 		return nil
 	}
-	return []string{store.FormatDate(target)}
+
+	defaultDate := store.FormatDate(defaultTarget)
+	candidates := []string{}
+	maxDate := defaultTarget.AddDate(0, 0, cadence-1)
+	if maxDate.After(horizonEnd) {
+		maxDate = horizonEnd
+	}
+	for d := defaultTarget; !d.After(maxDate); d = d.AddDate(0, 0, 1) {
+		candidates = append(candidates, store.FormatDate(d))
+	}
+
+	chosen := chooseBestDates(candidates, taskDef.Task.DurationMinutes, constraintsByDate, 1, []string{defaultDate})
+	if len(chosen) == 0 {
+		return nil
+	}
+	recordReason(reasons, taskDef.Task.ID, defaultDate, chosen[0])
+	return chosen
 }
 
-func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time) []string {
+func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDate, horizonEnd time.Time, constraintsByDate map[string]calendarConstraints, reasons map[string]string) []string {
 	weekStart := startOfWeek(planDate)
 	weekEnd := weekStart.AddDate(0, 0, 7)
 
@@ -587,7 +619,7 @@ func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrence
 		}
 	}
 
-	var dates []string
+	defaultDates := []string{}
 	for i := 0; i < remaining; i++ {
 		candidate := start.AddDate(0, 0, i*spacing)
 		if candidate.Before(planDate) {
@@ -596,16 +628,102 @@ func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrence
 		if !candidate.Before(weekEnd) || candidate.After(horizonEnd) {
 			break
 		}
-		dates = append(dates, store.FormatDate(candidate))
+		defaultDates = append(defaultDates, store.FormatDate(candidate))
 	}
 
 	// Deadline pressure: if we have run out of room in the week/horizon, schedule
 	// today so the cadence commitment is not silently missed.
 	daysLeft := int(weekEnd.Sub(planDate).Hours() / 24)
-	if len(dates) == 0 && remaining >= daysLeft {
+	if len(defaultDates) == 0 && remaining >= daysLeft {
 		return []string{store.FormatDate(planDate)}
 	}
-	return dates
+
+	// Consider any day in the current week/horizon so blocked default days can be
+	// replaced by lighter days.
+	candidatePool := []string{}
+	for d := planDate; d.Before(weekEnd) && !d.After(horizonEnd); d = d.AddDate(0, 0, 1) {
+		candidatePool = append(candidatePool, store.FormatDate(d))
+	}
+
+	chosen := chooseBestDates(candidatePool, taskDef.Task.DurationMinutes, constraintsByDate, remaining, defaultDates)
+	defaultSet := map[string]bool{}
+	for _, d := range defaultDates {
+		defaultSet[d] = true
+	}
+	moved := false
+	for _, dateStr := range chosen {
+		if !defaultSet[dateStr] {
+			moved = true
+		}
+	}
+	if moved {
+		recordReason(reasons, taskDef.Task.ID, "", "")
+	}
+	return chosen
+}
+
+func chooseBestDates(dates []string, duration int, constraintsByDate map[string]calendarConstraints, count int, preferredDates []string) []string {
+	type scored struct {
+		date  string
+		score int
+	}
+	preferredIndex := map[string]int{}
+	for i, d := range preferredDates {
+		preferredIndex[d] = i
+	}
+	scoredDates := make([]scored, 0, len(dates))
+	for _, dateStr := range dates {
+		constraints := constraintsByDate[dateStr]
+		score := availableBudgetScore(dateStr, duration, constraints)
+		if score < 0 {
+			continue
+		}
+		scoredDates = append(scoredDates, scored{date: dateStr, score: score})
+	}
+	if len(scoredDates) == 0 {
+		// No date is suitable (e.g., heavy task on small-task-only days).
+		// Fall back to the earliest candidate so it overflows honestly.
+		if len(dates) == 0 {
+			return nil
+		}
+		return []string{dates[0]}
+	}
+	sort.SliceStable(scoredDates, func(i, j int) bool {
+		if scoredDates[i].score != scoredDates[j].score {
+			return scoredDates[i].score > scoredDates[j].score
+		}
+		iPreferred, iOk := preferredIndex[scoredDates[i].date]
+		jPreferred, jOk := preferredIndex[scoredDates[j].date]
+		if iOk && jOk {
+			return iPreferred < jPreferred
+		}
+		if iOk {
+			return true
+		}
+		if jOk {
+			return false
+		}
+		return scoredDates[i].date < scoredDates[j].date
+	})
+	if count > len(scoredDates) {
+		count = len(scoredDates)
+	}
+	result := make([]string, count)
+	for i := 0; i < count; i++ {
+		result[i] = scoredDates[i].date
+	}
+	return result
+}
+
+func recordReason(reasons map[string]string, taskID, defaultDate, chosenDate string) {
+	if reasons == nil {
+		return
+	}
+	if defaultDate != "" && chosenDate != "" && defaultDate != chosenDate {
+		reasons[taskID] = fmt.Sprintf("Your calendar was full on %s, so we moved it to %s.", defaultDate, chosenDate)
+		return
+	}
+	reasons[taskID] = "We moved one or more occurrences to days with more room in your calendar."
 }
 
 func taskNameHash(name string) int {
@@ -770,6 +888,42 @@ func applyCalendarBudgets(budgets map[string]int, constraints calendarConstraint
 	for window := range constraints.ZeroBudgetWindows {
 		budgets[window] = 0
 	}
+}
+
+func (s *Service) loadCalendarConstraintsForRange(ctx context.Context, userID string, start, end time.Time) (map[string]calendarConstraints, error) {
+	constraints := map[string]calendarConstraints{}
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		dateStr := store.FormatDate(d)
+		blocks, err := s.blocks.ListByUserAndDate(ctx, userID, dateStr)
+		if err != nil {
+			return nil, fmt.Errorf("load calendar blocks for %s: %w", dateStr, err)
+		}
+		constraints[dateStr] = buildCalendarConstraints(blocks)
+	}
+	return constraints, nil
+}
+
+func availableBudgetScore(dateStr string, duration int, constraints calendarConstraints) int {
+	if constraints.SmallTaskOnlyReason != "" && duration > 15 {
+		return -1
+	}
+	blocked := 0
+	for window := range constraints.ZeroBudgetWindows {
+		blocked += windowDurationMinutes(window)
+	}
+	return max(0, 13*60-blocked) // 13 hours = 780 minutes of chore windows
+}
+
+func windowDurationMinutes(window string) int {
+	switch window {
+	case "morning":
+		return 4 * 60
+	case "afternoon":
+		return 4 * 60
+	case "evening":
+		return 5 * 60
+	}
+	return 0
 }
 
 func fitCandidates(candidates []scheduledCandidate, budgets map[string]int, planDate time.Time, constraints calendarConstraints) (scheduled, overflowed, skipped []scheduledCandidate) {
