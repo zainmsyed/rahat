@@ -1,17 +1,18 @@
 <script lang="ts">
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
 	import { formatReadyTime, windows, type LookaheadDay } from '$lib/api/lookahead';
 
 	export let day: LookaheadDay;
 </script>
 
-<article class="day-card">
-	<header>
+<article class="day-card card">
+	<header class="day-header">
 		<p class="eyebrow">{day.label}</p>
-		<h2>{day.date}</h2>
+		<h2 class="display-sm">{day.date}</h2>
 	</header>
 
 	{#if day.small_task_only_reason}
-		<p class="notice">{day.small_task_only_reason}</p>
+		<InfoBox title="Small tasks only">{day.small_task_only_reason}</InfoBox>
 	{/if}
 
 	<div class="windows">
@@ -19,33 +20,35 @@
 			<section class="window">
 				<div class="window-header">
 					<h3>{window}</h3>
-					<p>{day.window_budgets_minutes[window] ?? 0} min open</p>
+					<span class="budget">{day.window_budgets_minutes[window] ?? 0} min open</span>
 				</div>
 
 				{#if day.blocked_windows[window]?.length}
-					<div class="blocked">
-						<strong>Calendar limits this window</strong>
-						<ul>
+					<InfoBox title="Calendar limits this window">
+						<ul class="reasons">
 							{#each day.blocked_windows[window] as reason}
 								<li>{reason}</li>
 							{/each}
 						</ul>
-					</div>
+					</InfoBox>
 				{/if}
 
 				{#if day.windows[window]?.length}
 					<ul class="items">
 						{#each day.windows[window] as item}
 							<li>
-								<div>
-									<strong>{item.name}</strong>
-									<span>{item.duration_minutes} min{item.ready_at ? ` · ready ${formatReadyTime(item.ready_at)}` : ''}</span>
-								</div>
+								<strong>{item.name}</strong>
+								<span>
+									{item.duration_minutes} min
+									{#if item.ready_at}
+										· ready {formatReadyTime(item.ready_at)}
+									{/if}
+								</span>
 							</li>
 						{/each}
 					</ul>
 				{:else}
-					<p class="empty">No tasks scheduled for this window.</p>
+					<InfoBox>No tasks scheduled for this window.</InfoBox>
 				{/if}
 			</section>
 		{/each}
@@ -53,16 +56,19 @@
 
 	{#if day.omitted_items.length}
 		<section class="omitted">
-			<h3>Tasks not shown in the plan</h3>
-			<p>Rahat is being conservative because of your calendar or time budget.</p>
-			<ul>
-				{#each day.omitted_items as item}
-					<li>
-						<strong>{item.name}</strong>
-						<span>{item.window}: {item.reason}</span>
-					</li>
-				{/each}
-			</ul>
+			<InfoBox title="Tasks not shown in the plan">
+				<p class="omitted-lede">
+					Rahat is being conservative because of your calendar or time budget.
+				</p>
+				<ul class="omitted-items">
+					{#each day.omitted_items as item}
+						<li>
+							<strong>{item.name}</strong>
+							<span>{item.window}: {item.reason}</span>
+						</li>
+					{/each}
+				</ul>
+			</InfoBox>
 		</section>
 	{/if}
 </article>
@@ -70,91 +76,112 @@
 <style>
 	.day-card {
 		display: grid;
-		gap: 1rem;
-		padding: 1rem;
-		border-radius: 1.25rem;
-		background: white;
-		box-shadow: 0 12px 30px rgba(20, 32, 44, 0.08);
+		gap: var(--space-5);
 	}
 
-	header h2,
-	header p,
-	.window-header h3,
-	.window-header p,
-	.empty,
-	.notice,
-	.omitted p {
-		margin: 0;
+	.day-header {
+		display: grid;
+		gap: var(--space-2);
 	}
 
-	.eyebrow {
-		font-size: 0.8rem;
-		font-weight: 800;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: #4f46e5;
-	}
-
-	.notice,
-	.blocked,
-	.omitted {
-		padding: 0.85rem;
-		border-radius: 1rem;
-		background: #fff7ed;
-		border: 1px solid #fed7aa;
+	.day-header .display-sm {
+		font-family: var(--font-display);
+		font-size: 26px;
+		line-height: 1.1;
+		font-weight: 400;
+		color: var(--ink);
 	}
 
 	.windows {
 		display: grid;
-		gap: 0.9rem;
+		gap: var(--space-4);
 	}
 
 	.window {
 		display: grid;
-		gap: 0.75rem;
-		padding: 0.9rem;
-		border: 1px solid #dbe4ee;
-		border-radius: 1rem;
-		background: #fbfdff;
+		gap: var(--space-3);
+		padding: var(--space-4);
+		background: var(--bg-soft);
+		border: 1px solid var(--line-soft);
+		border-radius: var(--radius-xl);
 	}
 
 	.window-header {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: var(--space-3);
 	}
 
 	.window-header h3 {
+		font-size: 15px;
+		font-weight: 600;
 		text-transform: capitalize;
+		color: var(--ink);
 	}
 
-	.window-header p,
-	.empty,
-	.items span,
-	.omitted span {
-		color: #5d6b82;
+	.budget {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--ink-3);
 	}
 
-	ul {
+	.reasons {
 		margin: 0;
-		padding-left: 1.1rem;
+		padding-left: var(--space-5);
+		color: var(--ink-2);
 	}
 
 	.items {
-		padding: 0;
 		list-style: none;
+		margin: 0;
+		padding: 0;
 		display: grid;
-		gap: 0.65rem;
+		gap: var(--space-3);
 	}
 
-	.items li,
-	.omitted li {
-		line-height: 1.45;
+	.items li {
+		display: grid;
+		gap: var(--space-1);
+		padding: var(--space-3);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-lg);
 	}
 
-	.items span,
-	.omitted span {
-		display: block;
+	.items strong {
+		font-weight: 600;
+		color: var(--ink);
+	}
+
+	.items span {
+		font-size: 13px;
+		color: var(--ink-3);
+	}
+
+	.omitted-lede {
+		color: var(--ink-2);
+	}
+
+	.omitted-items {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-2);
+	}
+
+	.omitted-items li {
+		display: grid;
+		gap: var(--space-1);
+	}
+
+	.omitted-items strong {
+		color: var(--ink);
+	}
+
+	.omitted-items span {
+		font-size: 13px;
+		color: var(--ink-3);
 	}
 </style>

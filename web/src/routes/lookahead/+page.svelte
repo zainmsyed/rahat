@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import LookaheadDay from '$lib/components/schedule/LookaheadDay.svelte';
-	import { getLookaheadPlan, readLookaheadTokenFromUrl, type LookaheadResponse } from '$lib/api/lookahead';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
+	import {
+		getLookaheadPlan,
+		readLookaheadTokenFromUrl,
+		type LookaheadResponse
+	} from '$lib/api/lookahead';
 
 	let loading = true;
 	let pageError = '';
@@ -30,12 +35,12 @@
 </svelte:head>
 
 <main class="page">
-	<header class="hero">
+	<header class="hero card">
 		<p class="eyebrow">Rahat lookahead</p>
-		<h1>Today and tomorrow, read-only.</h1>
-		<p>
-			This passive page shows what Rahat plans around your calendar. There are no edit,
-			complete, or reschedule controls here.
+		<h1 class="display">Today and tomorrow, read-only.</h1>
+		<p class="lede">
+			This passive page shows what Rahat plans around your calendar. There are no edit, complete,
+			or reschedule controls here.
 		</p>
 		{#if plan}
 			<p class="user">For {plan.user.display_name || 'you'} · {plan.user.timezone}</p>
@@ -43,13 +48,11 @@
 	</header>
 
 	{#if loading}
-		<section class="panel">Loading your lookahead…</section>
+		<InfoBox title="Loading your lookahead…">One moment while we fetch the schedule.</InfoBox>
 	{:else if pageError}
-		<section class="panel error">
-			<h2>We could not open this lookahead link.</h2>
-			<p>{pageError}</p>
-			<p>Ask Rahat for a fresh link if this one has expired.</p>
-		</section>
+		<InfoBox title="We could not open this lookahead link.">
+			{pageError} Ask Rahat for a fresh link if this one has expired.
+		</InfoBox>
 	{:else if plan}
 		<section class="days" aria-label="Today and tomorrow schedule">
 			{#each plan.days as day}
@@ -60,72 +63,42 @@
 </main>
 
 <style>
-	:global(body) {
-		margin: 0;
-		font-family: Inter, system-ui, sans-serif;
-		background: #f4f7fb;
-		color: #14202c;
-	}
-
 	.page {
 		max-width: 860px;
 		margin: 0 auto;
-		padding: 1rem;
+		padding: var(--space-8) var(--space-5) var(--space-12);
 		display: grid;
-		gap: 1rem;
-	}
-
-	.hero,
-	.panel {
-		padding: 1.1rem;
-		border-radius: 1.25rem;
-		background: white;
-		box-shadow: 0 12px 30px rgba(20, 32, 44, 0.08);
-	}
-
-	.hero h1,
-	.hero p,
-	.panel h2,
-	.panel p {
-		margin: 0;
+		gap: var(--space-5);
 	}
 
 	.hero {
 		display: grid;
-		gap: 0.6rem;
+		gap: var(--space-3);
 	}
 
-	.hero p,
-	.panel p {
-		line-height: 1.55;
+	.hero .display {
+		font-size: clamp(1.75rem, 5vw, 2.5rem);
 	}
 
-	.eyebrow {
-		font-size: 0.8rem;
-		font-weight: 800;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: #4f46e5;
+	.hero .lede {
+		max-width: 54ch;
 	}
 
 	.user {
-		color: #5d6b82;
-		font-weight: 700;
+		margin-top: var(--space-2);
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--ink-3);
 	}
 
 	.days {
 		display: grid;
-		gap: 1rem;
+		gap: var(--space-5);
 	}
 
-	.error {
-		border: 1px solid #fecaca;
-		background: #fff7f7;
-	}
-
-	@media (min-width: 780px) {
+	@media (max-width: 540px) {
 		.page {
-			padding: 1.5rem;
+			padding: var(--space-5) var(--space-4);
 		}
 	}
 </style>

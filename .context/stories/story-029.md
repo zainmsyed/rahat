@@ -1,6 +1,6 @@
 # Story 029: Lookahead and landing pages redesign
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-26  
@@ -30,12 +30,12 @@ Apply the sage/cream shell to the today/tomorrow lookahead and the landing page 
 ---
 
 ## Checklist
-- [ ] Redesign the landing page to the centered card with display type, lede, and sage primary action.
-- [ ] Apply token styling to `LookaheadDay` cards and window lists.
-- [ ] Use `InfoBox` for empty-day and blocked-window explanations.
-- [ ] Preserve lookahead token-based access and API calls.
-- [ ] Confirm no local `:global(body)` style overrides remain in any page.
-- [ ] Run the full web test suite and visually verify both pages.
+- [x] Redesign the landing page to the centered card with display type, lede, and sage primary action.
+- [x] Apply token styling to `LookaheadDay` cards and window lists.
+- [x] Use `InfoBox` for empty-day and blocked-window explanations.
+- [x] Preserve lookahead token-based access and API calls.
+- [x] Confirm no local `:global(body)` style overrides remain in any page.
+- [x] Run the full web test suite and visually verify both pages.
 
 ---
 
@@ -44,3 +44,4 @@ Apply the sage/cream shell to the today/tomorrow lookahead and the landing page 
 ---
 
 ## Completion Summary
+Redesigned the public landing page (`web/src/routes/+page.svelte`) and the read-only lookahead page (`web/src/routes/lookahead/+page.svelte`) to share the sage/cream design-system language. The landing page now renders as a single centered 520px card with display typography, a lede, and a sage primary CTA anchor. The lookahead page removes its local `:global(body)` override, uses token cards and spacing, and surfaces loading and error states with `InfoBox`. `LookaheadDay` was rewritten with token day cards, window sections styled on the soft background, and `InfoBox` used for small-task-only notes, blocked-window reasons, empty-window notes, and omitted-item explanations. The token-based access flow and API calls are unchanged. Added `web/src/routes/page.test.ts` covering the landing page's card, heading, lede, and CTA. Full web test suite passes (73 tests) and `svelte-check` reports no errors.
