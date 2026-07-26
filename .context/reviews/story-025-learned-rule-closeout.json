@@ -1,0 +1,17 @@
+{
+  "note": "Two reusable rule candidates emerged from the review findings; no fallow or complaint signal was present.",
+  "candidates": [
+    {
+      "text": "When a UI story redesigns multiple pages, add or update page-level tests for every redesigned page, not just the primary one.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "The connection-page redesign touched Telegram, Calendar, and the Calendar callback, but only the Calendar main page had an updated test at first review. Adding tests for all redesigned pages caught markup regressions across the flow."
+    },
+    {
+      "text": "Use a semantic anchor element for actions that navigate to a URL instead of a button with a click handler that opens the link programmatically.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "The Telegram page originally used a button-mode tile that called window.open on the deep link. Switching to an anchor tile preserved the same behavior while enabling right-click, copy-link, and keyboard navigation."
+    }
+  ]
+}
