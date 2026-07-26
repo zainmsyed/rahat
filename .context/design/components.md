@@ -21,6 +21,12 @@
 - Props: `title`, `subtitle`, `icon`, `selected`
 - Use: Selectable list items such as starter tasks or connection options.
 
+## ConnectTile
+<!-- source: story-025 -->
+- Location: `web/src/lib/components/design/ConnectTile.svelte`
+- Props: `icon`, `name`, `subtitle`, `connected`, `href`, `target`, `rel`
+- Use: Provider connection tiles with a connected/disconnected status dot and optional link.
+
 ## InfoBox
 <!-- source: story-020 -->
 - Location: `web/src/lib/components/design/InfoBox.svelte`

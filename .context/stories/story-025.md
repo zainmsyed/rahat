@@ -1,6 +1,6 @@
 # Story 025: Onboarding connection pages redesign
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-26  
@@ -31,12 +31,12 @@ Redesign the Telegram and Google Calendar onboarding connection screens using co
 ---
 
 ## Checklist
-- [ ] Create or reuse a `ConnectTile` component matching the reference icon, name, status, and hover states.
-- [ ] Apply the connect tile to the Telegram and Calendar onboarding pages.
-- [ ] Use `InfoBox` for optional/unavailable provider messaging.
-- [ ] Preserve deep-link code exchange, redirect, and status polling logic.
-- [ ] Style the Calendar callback page inside the same shell.
-- [ ] Verify connection status still updates correctly after redesign.
+- [x] Create or reuse a `ConnectTile` component matching the reference icon, name, status, and hover states.
+- [x] Apply the connect tile to the Telegram and Calendar onboarding pages.
+- [x] Use `InfoBox` for optional/unavailable provider messaging.
+- [x] Preserve deep-link code exchange, redirect, and status polling logic.
+- [x] Style the Calendar callback page inside the same shell.
+- [x] Verify connection status still updates correctly after redesign.
 
 ---
 
@@ -45,3 +45,4 @@ Redesign the Telegram and Google Calendar onboarding connection screens using co
 ---
 
 ## Completion Summary
+Created `web/src/lib/components/design/ConnectTile.svelte` (with test and registry entry) to display provider connection tiles with icon, name, subtitle, and connected/disconnected status dots. Applied `ConnectTile` and `InfoBox` to `web/src/routes/onboarding/telegram/+page.svelte` and `web/src/routes/onboarding/calendar/+page.svelte`, replacing the old ad-hoc connection panels. Replaced raw buttons with the design-system `Button` component. Preserved Telegram deep-link opening, QR code/code display, and status polling, and preserved Google Calendar OAuth linking, disconnect, and status loading. Wrapped `web/src/routes/onboarding/calendar/callback/+page.svelte` in `OnboardingShell` and styled the loading/error states with `InfoBox` and `Button`. Updated the calendar page test to match the new tile markup. All web tests pass (58) and `svelte-check` reports no errors.

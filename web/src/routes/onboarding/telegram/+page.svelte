@@ -3,6 +3,9 @@
 	import { onMount, onDestroy } from 'svelte';
 	import QRCode from 'qrcode';
 	import OnboardingShell from '$lib/components/OnboardingShell.svelte';
+	import Button from '$lib/components/design/Button.svelte';
+	import ConnectTile from '$lib/components/design/ConnectTile.svelte';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
 	import {
 		buildOnboardingSteps,
 		clearStoredOnboardingToken,
@@ -21,7 +24,13 @@
 	let loading = true;
 	let skipping = false;
 	let pageError = '';
-	let state: OnboardingState = { has_profile: false, telegram_linked: false, calendar_connected: false, tasks: [], starter_templates: [] };
+	let state: OnboardingState = {
+		has_profile: false,
+		telegram_linked: false,
+		calendar_connected: false,
+		tasks: [],
+		starter_templates: []
+	};
 	let sessionToken = '';
 	let status: TelegramStatus = { available: false, linked: false };
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -111,6 +120,11 @@
 		}
 	}
 
+	function openTelegram() {
+		if (status.deep_link) {
+			window.open(status.deep_link, '_blank', 'noopener,noreferrer');
+		}
+	}
 </script>
 
 {#if loading}
@@ -122,73 +136,77 @@
 		title="Connect Telegram for interactive reminders."
 		intro="Telegram is the best way to get quick check-ins and reminders. One tap opens the bot, then send your short code to link this account."
 	>
-		<section class="panel active">
-			<p class="label">{formatStepLabel(steps[2])}</p>
-			<h2>Connect Telegram</h2>
+		<div class="connection-page">
+			<p class="step-label">{formatStepLabel(steps[2])}</p>
+			<h2 class="page-title">Connect Telegram</h2>
 
 			{#if !status.available}
-				<div class="fallback">
-					<p><strong>Telegram is not configured right now.</strong></p>
-					<p>
-						You can continue with email only. If you added an email address on the previous screen,
-						Rahat will use it for recaps.
-					</p>
-					<button type="button" on:click={() => goto('/onboarding/calendar')} disabled={skipping}>
+				<InfoBox title="Telegram is not configured right now.">
+					You can continue with email only. If you added an email address on the previous
+					screen, Rahat will use it for recaps.
+				</InfoBox>
+				<div class="actions">
+					<Button variant="secondary" on:click={() => goto('/onboarding/profile')}>Back</Button>
+					<Button variant="primary" on:click={() => goto('/onboarding/calendar')} disabled={skipping}>
 						Continue with email only
-					</button>
+					</Button>
 				</div>
 			{:else if status.linked}
-				<div class="success-banner">
-					<h3>Telegram is connected.</h3>
-					<p>You should receive a welcome message in your chat with @{status.bot_username}.</p>
-					<button type="button" on:click={() => goto('/onboarding/calendar')}>Continue to calendar</button>
+				<ConnectTile
+					icon="✈️"
+					name="Telegram"
+					subtitle="Interactive reminders and check-ins"
+					connected={true}
+				/>
+				<InfoBox title="Telegram is connected.">
+					You should receive a welcome message in your chat with @{status.bot_username}.
+				</InfoBox>
+				<div class="actions">
+					<Button variant="secondary" on:click={() => goto('/onboarding/profile')}>Back</Button>
+					<Button variant="primary" on:click={() => goto('/onboarding/calendar')}>
+						Continue to calendar
+					</Button>
 				</div>
 			{:else}
-				<div class="connection">
-					<p>Tap the button to open Telegram. Your code is already filled in — just send the message.</p>
+				<ConnectTile
+					icon="✈️"
+					name="Telegram"
+					subtitle="Interactive reminders and check-ins"
+					connected={false}
+					on:click={openTelegram}
+				/>
 
-					{#if status.deep_link}
-						<a class="deep-link" href={status.deep_link} target="_blank" rel="noopener noreferrer">
-							Open @{status.bot_username} in Telegram
-						</a>
-					{/if}
+				<InfoBox title="How to connect">
+					Tap the tile to open Telegram. Your code is already filled in — just send the
+					message. Waiting for your message…
+				</InfoBox>
 
-					{#if status.code}
-						<div class="code-box">
-							<span class="code-label">Your code</span>
-							<strong class="code">{status.code}</strong>
-						</div>
-					{/if}
+				{#if status.code}
+					<div class="code-box">
+						<span class="code-label">Your code</span>
+						<strong class="code">{status.code}</strong>
+					</div>
+				{/if}
 
-					{#if qrCodeDataUrl}
-						<div class="qr">
-							<p>Or scan this QR code:</p>
-							<img src={qrCodeDataUrl} alt="Telegram bot QR code" width="200" height="200" />
-						</div>
-					{/if}
+				{#if qrCodeDataUrl}
+					<div class="qr">
+						<p>Or scan this QR code:</p>
+						<img src={qrCodeDataUrl} alt="Telegram bot QR code" width="180" height="180" />
+					</div>
+				{/if}
 
-					<p class="waiting">Waiting for your message…</p>
-				</div>
-
-				<div class="fallback">
-					<p>Prefer not to use Telegram?</p>
-					<button type="button" class="ghost" on:click={skip} disabled={skipping}>
+				<div class="actions">
+					<Button variant="secondary" on:click={() => goto('/onboarding/profile')}>Back</Button>
+					<Button variant="text" on:click={skip} disabled={skipping}>
 						{skipping ? 'Skipping…' : 'Skip and continue with email only'}
-					</button>
+					</Button>
 				</div>
 			{/if}
 
 			{#if pageError}
-				<p class="error-banner">{pageError}</p>
+				<p class="error-banner" role="alert">{pageError}</p>
 			{/if}
-
-			<div class="actions between">
-				<button type="button" class="ghost" on:click={() => goto('/onboarding/profile')}>Back</button>
-				{#if status.linked}
-					<button type="button" on:click={() => goto('/onboarding/calendar')}>Continue to calendar</button>
-				{/if}
-			</div>
-		</section>
+		</div>
 	</OnboardingShell>
 {/if}
 
@@ -198,122 +216,84 @@
 		display: grid;
 		place-items: center;
 		font-size: 1.1rem;
+		color: var(--ink-2);
 	}
 
-	.panel {
+	.connection-page {
 		display: grid;
-		gap: 1rem;
-		border: 2px solid #d6e4ff;
+		gap: var(--space-5);
 	}
 
-	.connection,
-	.fallback,
-	.success-banner {
-		display: grid;
-		gap: 1rem;
-		padding: 1rem;
-		border-radius: 1rem;
-		background: #fbfdff;
-		border: 1px solid #dbe4ee;
+	.step-label {
+		font-size: 11px;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--primary-2);
+		font-weight: 600;
 	}
 
-	.success-banner {
-		background: #f0fdf4;
-		border-color: #bbf7d0;
-	}
-
-	.deep-link {
-		display: inline-block;
-		padding: 0.85rem 1.1rem;
-		border-radius: 999px;
-		background: #2a6df4;
-		color: white;
-		font-weight: 700;
-		text-decoration: none;
-		text-align: center;
+	.page-title {
+		font-family: var(--font-display);
+		font-size: 28px;
+		line-height: 1.1;
+		font-weight: 400;
+		color: var(--ink);
+		margin: 0;
 	}
 
 	.code-box {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.4rem;
-		padding: 1rem;
-		border-radius: 1rem;
-		background: white;
-		border: 2px dashed #cbd5e1;
+		gap: var(--space-2);
+		padding: var(--space-5);
+		border-radius: var(--radius-lg);
+		background: var(--bg-soft);
+		border: 2px dashed var(--line);
 	}
 
 	.code-label {
-		font-size: 0.85rem;
+		font-size: 12px;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: #5d6b82;
+		color: var(--ink-3);
 	}
 
 	.code {
 		font-size: 2rem;
 		letter-spacing: 0.15em;
-		color: #14202c;
+		color: var(--ink);
 	}
 
 	.qr {
 		display: grid;
 		place-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
+		font-size: 13px;
+		color: var(--ink-3);
 	}
 
-	.qr p {
-		margin: 0;
-		color: #5d6b82;
-	}
-
-	.waiting {
-		margin: 0;
-		color: #5d6b82;
-		font-style: italic;
-	}
-
-	button {
-		padding: 0.85rem 1.1rem;
-		border-radius: 999px;
-		border: none;
-		background: #2a6df4;
-		color: white;
-		font: inherit;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	button.ghost {
-		background: white;
-		color: #14202c;
-		border: 1px solid #cbd5e1;
-	}
-
-	button:disabled {
-		opacity: 0.7;
-		cursor: wait;
-	}
-
-	.actions.between {
+	.actions {
 		display: flex;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: var(--space-4);
+		padding-top: var(--space-2);
+		min-width: 0;
 	}
 
 	.error-banner {
-		color: #b42318;
+		color: var(--rose);
 		font-weight: 600;
-		padding: 0.9rem 1rem;
-		border-radius: 1rem;
-		background: #fff1f0;
+		padding: var(--space-4);
+		border-radius: var(--radius-lg);
+		background: var(--rose-soft);
 	}
 
-	@media (max-width: 720px) {
-		.actions.between {
+	@media (max-width: 540px) {
+		.actions {
 			flex-direction: column;
+			align-items: stretch;
 		}
 	}
 </style>

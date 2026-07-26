@@ -131,7 +131,7 @@ describe('CalendarPage', () => {
 		render(CalendarPage);
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
-		expect(screen.getByRole('link', { name: /Connect Google Calendar/i })).toHaveAttribute(
+		expect(screen.getByRole('link', { name: /Google Calendar/i })).toHaveAttribute(
 			'href',
 			'https://accounts.google.test/oauth'
 		);

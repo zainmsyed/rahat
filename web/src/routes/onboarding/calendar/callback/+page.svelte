@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import OnboardingShell from '$lib/components/OnboardingShell.svelte';
+	import Button from '$lib/components/design/Button.svelte';
+	import InfoBox from '$lib/components/design/InfoBox.svelte';
 	import {
 		apiBaseUrl,
+		buildOnboardingSteps,
 		clearStoredOnboardingToken,
 		getStoredOnboardingToken,
 		syncTokenInUrl
@@ -11,6 +15,17 @@
 	let loading = true;
 	let pageError = '';
 	let sessionToken = '';
+
+	$: steps = buildOnboardingSteps(
+		{
+			has_profile: true,
+			telegram_linked: false,
+			calendar_connected: false,
+			tasks: [],
+			starter_templates: []
+		},
+		!!sessionToken
+	);
 
 	onMount(async () => {
 		sessionToken = getStoredOnboardingToken();
@@ -63,85 +78,50 @@
 	}
 </script>
 
-<div class="callback">
-	{#if loading}
-		<p class="loading">Completing Google Calendar connection…</p>
-	{:else if pageError}
-		<div class="error-panel">
-			<h1>Calendar connection did not finish</h1>
-			<p class="error-banner">{pageError}</p>
+<OnboardingShell
+	{steps}
+	currentStep={3}
+	title="Completing Google Calendar connection."
+	intro="We're exchanging the secure code from Google. This should only take a moment."
+>
+	<div class="callback">
+		{#if loading}
+			<p class="loading">Completing Google Calendar connection…</p>
+		{:else if pageError}
+			<InfoBox title="Calendar connection did not finish">{pageError}</InfoBox>
 			<div class="actions">
-				<button type="button" class="ghost" on:click={() => goto('/onboarding/calendar')}
-					>Back to calendar step</button
-				>
-				<button type="button" on:click={restart}>Restart onboarding</button>
+				<Button variant="secondary" on:click={() => goto('/onboarding/calendar')}>
+					Back to calendar step
+				</Button>
+				<Button variant="primary" on:click={restart}>Restart onboarding</Button>
 			</div>
-		</div>
-	{/if}
-</div>
+		{/if}
+	</div>
+</OnboardingShell>
 
 <style>
 	.callback {
-		min-height: 100vh;
 		display: grid;
-		place-items: center;
-		padding: 1.5rem;
-		font-family: Inter, system-ui, sans-serif;
-		background: #f4f7fb;
-		color: #14202c;
+		gap: var(--space-5);
+		justify-items: start;
 	}
 
 	.loading {
 		font-size: 1.1rem;
-	}
-
-	.error-panel {
-		max-width: 520px;
-		padding: 1.5rem;
-		border-radius: 1.4rem;
-		background: white;
-		box-shadow: 0 16px 40px rgba(20, 32, 44, 0.08);
-	}
-
-	.error-panel h1 {
-		margin: 0 0 1rem;
-		font-size: 1.4rem;
-	}
-
-	.error-banner {
-		color: #b42318;
-		font-weight: 600;
-		padding: 0.9rem 1rem;
-		border-radius: 1rem;
-		background: #fff1f0;
+		color: var(--ink-2);
 	}
 
 	.actions {
 		display: flex;
-		gap: 1rem;
-		margin-top: 1rem;
+		gap: var(--space-4);
+		min-width: 0;
 	}
 
-	button {
-		padding: 0.85rem 1.1rem;
-		border-radius: 999px;
-		border: none;
-		background: #2a6df4;
-		color: white;
-		font: inherit;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	button.ghost {
-		background: white;
-		color: #14202c;
-		border: 1px solid #cbd5e1;
-	}
-
-	@media (max-width: 720px) {
+	@media (max-width: 540px) {
 		.actions {
 			flex-direction: column;
+			align-items: stretch;
+			width: 100%;
 		}
 	}
 </style>
