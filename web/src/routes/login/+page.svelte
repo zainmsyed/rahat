@@ -29,6 +29,16 @@
 		}
 	});
 
+	function extractToken(value: string): string {
+		const trimmed = value.trim();
+		try {
+			const url = new URL(trimmed);
+			return url.searchParams.get('token')?.trim() || trimmed;
+		} catch {
+			return trimmed;
+		}
+	}
+
 	async function doExchange(token: string) {
 		exchanging = true;
 		pageError = '';
@@ -45,7 +55,7 @@
 	}
 
 	async function submitToken() {
-		const token = tokenInput.trim();
+		const token = extractToken(tokenInput);
 		if (!token) return;
 		await doExchange(token);
 	}
@@ -108,7 +118,7 @@
 					placeholder="Paste your access link or token"
 					required
 					bind:value={tokenInput}
-					error={pageError ? ' ' : ''}
+					invalid={pageError !== ''}
 				/>
 				<Button variant="primary" type="submit" disabled={exchanging} fullWidth>
 					{exchanging ? 'Signing in…' : 'Sign in'}

@@ -6,6 +6,7 @@
 	export let type: 'text' | 'email' | 'password' | 'number' = 'text';
 	export let required = false;
 	export let error = '';
+	export let invalid = false;
 	export let min: number | string = '';
 	export let max: number | string = '';
 </script>
@@ -21,7 +22,7 @@
 		min={min}
 		max={max}
 		bind:value
-		class:error={error !== ''}
+		class:error={error !== '' || invalid}
 	/>
 	{#if error}
 		<p class="error-text">{error}</p>

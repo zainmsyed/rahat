@@ -48,4 +48,13 @@ describe('Input', () => {
 		await fireEvent.input(input, { target: { value: '90' } });
 		expect(input).toHaveValue(90);
 	});
+
+	it('styles the field as errored when the invalid prop is set', () => {
+		const { container } = render(Input, {
+			props: { id: 'code', label: 'Invite code', invalid: true }
+		});
+
+		expect(screen.getByRole('textbox')).toHaveClass('error');
+		expect(container.querySelector('.error-text')).not.toBeInTheDocument();
+	});
 });

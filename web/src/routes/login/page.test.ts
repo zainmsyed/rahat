@@ -76,4 +76,24 @@ describe('LoginPage', () => {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(screen.getByText('Link expired')).toBeInTheDocument();
 	});
+
+	it('extracts the token from a pasted access-link URL', async () => {
+		getCurrentSession.mockResolvedValue({ authenticated: false });
+		exchangeAccessLink.mockResolvedValue({ authenticated: true, user: { display_name: 'Tester' } });
+
+		render(LoginPage);
+		await screen.findByText('Use your beta access link.');
+
+		const tokenInput = screen.getByLabelText('Beta access token *');
+		await fireEvent.input(tokenInput, {
+			target: { value: 'http://localhost:5200/login?token=url-token' }
+		});
+
+		const signInButton = screen.getByRole('button', { name: /Sign in/i });
+		await fireEvent.click(signInButton);
+
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(exchangeAccessLink).toHaveBeenCalledWith('url-token');
+		expect(mockGoto).toHaveBeenCalledWith('/tasks');
+	});
 });

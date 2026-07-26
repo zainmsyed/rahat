@@ -12,8 +12,8 @@
 ## Input
 <!-- source: story-020 -->
 - Location: `web/src/lib/components/design/Input.svelte`
-- Props: `id`, `label`, `value`, `placeholder`, `type`, `required`, `error`, `min`, `max`
-- Use: Form fields with labeled controls and optional error messaging. Supports text, email, password, and number values.
+- Props: `id`, `label`, `value`, `placeholder`, `type`, `required`, `error`, `invalid`, `min`, `max`
+- Use: Form fields with labeled controls and optional error messaging. Supports text, email, password, and number values. The `invalid` prop styles the field as errored without displaying a message.
 
 ## Tile
 <!-- source: story-020 -->
