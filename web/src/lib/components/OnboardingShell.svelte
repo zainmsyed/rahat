@@ -1,5 +1,5 @@
 <script lang="ts">
-	import OnboardingStepper from '$lib/components/OnboardingStepper.svelte';
+	import OnboardingStepper from './OnboardingStepper.svelte';
 	import type { OnboardingStep } from '$lib/api/onboarding';
 
 	export let steps: OnboardingStep[] = [];
@@ -7,6 +7,9 @@
 	export let title = '';
 	export let intro = '';
 	export let finished = false;
+
+	$: counter = finished ? 'Done' : steps.length > 0 ? `${currentStep + 1} of ${steps.length}` : '';
+	$: eyebrow = finished ? 'All set' : steps.length > 0 ? `Step ${currentStep + 1} of ${steps.length}` : '';
 </script>
 
 <svelte:head>
@@ -18,80 +21,135 @@
 </svelte:head>
 
 <div class="page">
+	<header class="topbar">
+		<div class="wordmark">Rahat<span>.</span></div>
+		<div class="topbar-meta">{counter}</div>
+	</header>
+
 	<OnboardingStepper {steps} {currentStep} {finished} />
 
-	<main class="content">
-		<header class="hero">
-			<p class="eyebrow">Welcome to Rahat</p>
-			<h1>{title}</h1>
-			<p>{intro}</p>
-		</header>
-
-		<slot />
+	<main class="stage">
+		<section class="step active">
+			<p class="step-eyebrow">{eyebrow}</p>
+			<h1 class="step-title">{title}</h1>
+			<p class="step-lede">{intro}</p>
+			<slot />
+		</section>
 	</main>
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		font-family: Inter, system-ui, sans-serif;
-		background: #f4f7fb;
-		color: #14202c;
-	}
-
 	.page {
-		max-width: 1200px;
+		min-height: 100vh;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		max-width: var(--surface-max-width);
+		width: 100%;
 		margin: 0 auto;
-		padding: 1.5rem;
-		display: grid;
-		grid-template-columns: 320px minmax(0, 1fr);
-		gap: 1.5rem;
+		padding: var(--space-6) var(--space-5) var(--space-3);
 	}
 
-	.content {
-		display: grid;
-		gap: 1.25rem;
+	.wordmark {
+		font-family: var(--font-display);
+		font-size: 24px;
+		font-weight: 400;
+		letter-spacing: -0.01em;
+		color: var(--ink);
 	}
 
-	.hero,
-	:global(.panel),
-	:global(.success) {
-		padding: 1.4rem;
-		border-radius: 1.4rem;
-		background: white;
-		box-shadow: 0 16px 40px rgba(20, 32, 44, 0.08);
+	.wordmark span {
+		color: var(--primary-2);
 	}
 
-	.hero h1,
-	:global(.panel h2),
-	:global(.panel h3),
-	:global(.panel h4),
-	:global(.success h3),
-	:global(.success h4) {
-		margin: 0;
+	.topbar-meta {
+		font-size: 12px;
+		color: var(--ink-3);
+		letter-spacing: 0.04em;
+		font-feature-settings: 'tnum';
 	}
 
-	.hero p,
-	:global(.panel p),
-	:global(.success p),
-	:global(.panel li),
-	:global(.success li) {
-		line-height: 1.55;
+	.stage {
+		flex: 1;
+		width: 100%;
+		max-width: var(--surface-max-width);
+		margin: 0 auto;
+		padding: 0 var(--space-5) var(--space-10);
+		position: relative;
 	}
 
-	.eyebrow,
-	:global(.label) {
-		margin: 0 0 0.4rem;
-		font-size: 0.85rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
+	.step {
+		display: none;
+		animation: stepIn 0.5s var(--ease-out);
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-3xl);
+		box-shadow: var(--shadow-md);
+		padding: var(--space-8) var(--space-6);
+	}
+
+	.step.active {
+		display: block;
+	}
+
+	@keyframes stepIn {
+		0% {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.step-eyebrow {
+		font-size: 11px;
+		letter-spacing: 0.18em;
 		text-transform: uppercase;
-		color: #4f46e5;
+		color: var(--primary-2);
+		font-weight: 600;
+		margin-bottom: var(--space-3);
 	}
 
-	@media (max-width: 960px) {
-		.page {
-			grid-template-columns: 1fr;
+	.step-title {
+		font-family: var(--font-display);
+		font-size: 34px;
+		line-height: 1.1;
+		letter-spacing: -0.005em;
+		color: var(--ink);
+		margin-bottom: var(--space-3);
+		font-weight: 400;
+	}
+
+	.step-lede {
+		font-size: 15.5px;
+		color: var(--ink-2);
+		line-height: 1.6;
+		margin-bottom: var(--space-6);
+	}
+
+	@media (max-width: 540px) {
+		.topbar {
+			padding: var(--space-5) var(--space-4) var(--space-3);
+		}
+
+		.stage {
+			padding: 0 var(--space-4) var(--space-8);
+		}
+
+		.step {
+			padding: var(--space-6) var(--space-4);
+			border-radius: var(--radius-2xl);
+		}
+
+		.step-title {
+			font-size: 28px;
 		}
 	}
 </style>
