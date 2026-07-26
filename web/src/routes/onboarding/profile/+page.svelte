@@ -121,7 +121,7 @@
 				<Input
 					id="display_name"
 					label="Name"
-					placeholder="What should Rahat call you?"
+					placeholder="What should we call you?"
 					required
 					bind:value={profileDraft.display_name}
 					error={profileErrors.display_name}
