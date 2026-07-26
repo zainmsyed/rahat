@@ -126,6 +126,23 @@ describe('ProfilePage', () => {
 		expect(summary).toHaveTextContent('minutes per day');
 	});
 
+	it('renders proportional budget tick labels', async () => {
+		getState.mockResolvedValue({
+			has_profile: false,
+			telegram_linked: false,
+			calendar_connected: false,
+			tasks: [],
+			starter_templates: []
+		});
+
+		render(ProfilePage);
+		await waitFor(() => expect(screen.getByLabelText('Name *')).toBeInTheDocument());
+
+		[15, 60, 120, 240, 480].forEach((tick) => {
+			expect(screen.getByText(String(tick))).toBeInTheDocument();
+		});
+	});
+
 	it('shows validation errors and does not submit when required fields are invalid', async () => {
 		getState.mockResolvedValue({
 			has_profile: false,

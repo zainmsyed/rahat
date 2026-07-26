@@ -38,6 +38,12 @@
 	};
 
 	const budgetTicks = [15, 60, 120, 240, 480];
+	const MIN_BUDGET = 15;
+	const MAX_BUDGET = 480;
+
+	function tickPosition(value: number) {
+		return ((value - MIN_BUDGET) / (MAX_BUDGET - MIN_BUDGET)) * 100;
+	}
 
 	$: steps = buildOnboardingSteps(state, !!sessionToken);
 
@@ -151,8 +157,14 @@
 					aria-describedby="budget-summary budget-summary-hint"
 				/>
 				<div class="slider-ticks" aria-hidden="true">
-					{#each budgetTicks as tick}
-						<span>{tick}</span>
+					{#each budgetTicks as tick, index}
+						<span
+							class:first={index === 0}
+							class:last={index === budgetTicks.length - 1}
+							style="left: {tickPosition(tick)}%"
+						>
+							{tick}
+						</span>
 					{/each}
 				</div>
 				<SummaryBox
@@ -288,11 +300,25 @@
 	}
 
 	.slider-ticks {
-		display: flex;
-		justify-content: space-between;
+		position: relative;
+		height: 18px;
 		font-size: 12px;
 		color: var(--ink-3);
-		padding: 0 4px;
+	}
+
+	.slider-ticks span {
+		position: absolute;
+		top: 0;
+		transform: translateX(-50%);
+		white-space: nowrap;
+	}
+
+	.slider-ticks span.first {
+		transform: translateX(0);
+	}
+
+	.slider-ticks span.last {
+		transform: translateX(-100%);
 	}
 
 	.error-text {
