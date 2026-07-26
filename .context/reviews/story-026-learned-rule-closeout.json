@@ -1,0 +1,17 @@
+{
+  "note": "One reusable rule candidate emerged from the slider tick-alignment fix; no fallow or complaint signal was present.",
+  "candidates": [
+    {
+      "text": "Position slider tick labels proportionally to the underlying value range, not evenly across the track.",
+      "confidence": "high",
+      "sources": ["story issue", "review finding"],
+      "rationale": "Evenly spacing tick labels made the profile-page budget slider thumb appear over the wrong value. Aligning each label at `((value - min) / (max - min)) * 100%` keeps the thumb and label visually matched across the range."
+    },
+    {
+      "text": "When fixing a visual layout bug, add a regression test that asserts the presence or structure of the corrected element even when pixel-perfect alignment must be verified manually.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "The slider fix included a test that verifies the tick labels are rendered, guarding against accidental removal or reversion to the old even-spaced layout."
+    }
+  ]
+}
