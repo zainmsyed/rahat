@@ -64,17 +64,13 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 	}
 	planDateStr := store.FormatDate(planDate)
 	backlog, current, history := splitOccurrences(allOccurrences, planDateStr)
-	calendarBlocks, err := s.blocks.ListByUserAndDate(ctx, userID, planDateStr)
-	if err != nil {
-		return PlanResult{}, fmt.Errorf("load calendar blocks: %w", err)
-	}
-	constraints := buildCalendarConstraints(calendarBlocks)
 
 	horizonEnd := planDate.AddDate(0, 0, 6)
-	constraintsByDate, err := s.loadCalendarConstraintsForRange(ctx, userID, planDate, horizonEnd)
+	constraintsByDate, err := s.loadCalendarConstraintsForRange(ctx, user.ID, planDate, horizonEnd)
 	if err != nil {
 		return PlanResult{}, err
 	}
+	constraints := constraintsByDate[planDateStr]
 	reasons := map[string]string{}
 
 	candidates, err := s.buildCandidates(ctx, tasksWithSubtasks, history, backlog, current, planDate, constraintsByDate, reasons)
@@ -208,17 +204,13 @@ func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User
 	}
 	planDateStr := store.FormatDate(planDate)
 	backlog, current, history := splitOccurrences(allOccurrences, planDateStr)
-	calendarBlocks, err := s.blocks.ListByUserAndDate(ctx, user.ID, planDateStr)
-	if err != nil {
-		return PlanResult{}, nil, fmt.Errorf("load calendar blocks: %w", err)
-	}
-	constraints := buildCalendarConstraints(calendarBlocks)
 
 	horizonEnd := planDate.AddDate(0, 0, 6)
 	constraintsByDate, err := s.loadCalendarConstraintsForRange(ctx, user.ID, planDate, horizonEnd)
 	if err != nil {
 		return PlanResult{}, nil, err
 	}
+	constraints := constraintsByDate[planDateStr]
 	reasons := map[string]string{}
 
 	candidates, err := s.buildCandidates(ctx, taskDefs, history, backlog, current, planDate, constraintsByDate, reasons)
@@ -891,14 +883,22 @@ func applyCalendarBudgets(budgets map[string]int, constraints calendarConstraint
 }
 
 func (s *Service) loadCalendarConstraintsForRange(ctx context.Context, userID string, start, end time.Time) (map[string]calendarConstraints, error) {
+	startDate := store.FormatDate(start)
+	endDate := store.FormatDate(end)
+	blocks, err := s.blocks.ListByUserAndDateRange(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("load calendar blocks for range %s..%s: %w", startDate, endDate, err)
+	}
+
+	blocksByDate := map[string][]store.CalendarBlock{}
+	for _, block := range blocks {
+		blocksByDate[block.LocalDate] = append(blocksByDate[block.LocalDate], block)
+	}
+
 	constraints := map[string]calendarConstraints{}
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		dateStr := store.FormatDate(d)
-		blocks, err := s.blocks.ListByUserAndDate(ctx, userID, dateStr)
-		if err != nil {
-			return nil, fmt.Errorf("load calendar blocks for %s: %w", dateStr, err)
-		}
-		constraints[dateStr] = buildCalendarConstraints(blocks)
+		constraints[dateStr] = buildCalendarConstraints(blocksByDate[dateStr])
 	}
 	return constraints, nil
 }
@@ -911,7 +911,15 @@ func availableBudgetScore(dateStr string, duration int, constraints calendarCons
 	for window := range constraints.ZeroBudgetWindows {
 		blocked += windowDurationMinutes(window)
 	}
-	return max(0, 13*60-blocked) // 13 hours = 780 minutes of chore windows
+	return max(0, totalWindowDurationMinutes()-blocked)
+}
+
+func totalWindowDurationMinutes() int {
+	total := 0
+	for _, window := range []string{"morning", "afternoon", "evening"} {
+		total += windowDurationMinutes(window)
+	}
+	return total
 }
 
 func windowDurationMinutes(window string) int {

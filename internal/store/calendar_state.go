@@ -157,10 +157,18 @@ func (r *CalendarBlockRepository) ReplaceDay(ctx context.Context, userID, provid
 }
 
 func (r *CalendarBlockRepository) ListByUserAndDate(ctx context.Context, userID, localDate string) ([]CalendarBlock, error) {
+	return r.listByUserAndDateRange(ctx, userID, localDate, localDate)
+}
+
+func (r *CalendarBlockRepository) ListByUserAndDateRange(ctx context.Context, userID, startDate, endDate string) ([]CalendarBlock, error) {
+	return r.listByUserAndDateRange(ctx, userID, startDate, endDate)
+}
+
+func (r *CalendarBlockRepository) listByUserAndDateRange(ctx context.Context, userID, startDate, endDate string) ([]CalendarBlock, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, user_id, provider, external_event_id, local_date, timezone, title, detail, start_at, end_at, is_all_day, classification, window, created_at, updated_at
-		FROM calendar_blocks WHERE user_id = ? AND local_date = ? ORDER BY start_at, title
-	`, userID, localDate)
+		FROM calendar_blocks WHERE user_id = ? AND local_date >= ? AND local_date <= ? ORDER BY local_date, start_at, title
+	`, userID, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("list calendar blocks: %w", err)
 	}

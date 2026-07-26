@@ -1007,8 +1007,8 @@ func TestSchedulerCalendarAwareDaySelection(t *testing.T) {
 	tests := []struct {
 		name           string
 		seed           func(context.Context, *testing.T, *users.Service, *tasks.Service, *occurrences.Service, *store.CalendarBlockRepository) (string, string)
-		start          time.Time
-		wantGroceryDay string
+		start   time.Time
+		wantDay string
 	}{
 		{
 			name: "grocery moves from afternoon-blocked day to free day",
@@ -1028,8 +1028,8 @@ func TestSchedulerCalendarAwareDaySelection(t *testing.T) {
 				}
 				return user.ID, grocery.Task.ID
 			},
-			start:          time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC),
-			wantGroceryDay: "2026-08-05",
+			start:   time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC),
+			wantDay: "2026-08-05",
 		},
 		{
 			name: "heavy grocery moves from all-day event day to free day",
@@ -1049,8 +1049,29 @@ func TestSchedulerCalendarAwareDaySelection(t *testing.T) {
 				}
 				return user.ID, grocery.Task.ID
 			},
-			start:          time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC),
-			wantGroceryDay: "2026-08-05",
+			start:   time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC),
+			wantDay: "2026-08-05",
+		},
+		{
+			name: "count laundry moves from blocked default day to next free day",
+			seed: func(ctx context.Context, t *testing.T, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, blockRepo *store.CalendarBlockRepository) (string, string) {
+				t.Helper()
+				user, err := userService.Create(ctx, users.User{DisplayName: "Calendar aware", Timezone: "UTC", DailyTimeBudgetMinutes: 80})
+				if err != nil {
+					t.Fatal(err)
+				}
+				laundry, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Laundry", DurationMinutes: 30, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayAfternoon}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, _ = occurrenceService.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: laundry.Task.ID, Status: occurrences.StatusCompleted, ScheduledForDate: "2026-07-27", OriginalScheduledForDate: "2026-07-27", ScheduledTimeOfDay: tasks.TimeOfDayAfternoon})
+				if err := blockRepo.ReplaceDay(ctx, user.ID, "google", "2026-07-30", []store.CalendarBlock{{UserID: user.ID, Provider: "google", ExternalEventID: "evt-3", LocalDate: "2026-07-30", Timezone: "UTC", Title: "Afternoon meeting", Classification: "medium", Window: "afternoon"}}); err != nil {
+					t.Fatal(err)
+				}
+				return user.ID, laundry.Task.ID
+			},
+			start:   time.Date(2026, 7, 30, 0, 0, 0, 0, time.UTC),
+			wantDay: "2026-07-31",
 		},
 	}
 
@@ -1069,18 +1090,18 @@ func TestSchedulerCalendarAwareDaySelection(t *testing.T) {
 			blockRepo := store.NewCalendarBlockRepository(sqlDB)
 			svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
 
-			userID, groceryID := tt.seed(ctx, t, userService, taskService, occurrenceService, blockRepo)
+			userID, taskID := tt.seed(ctx, t, userService, taskService, occurrenceService, blockRepo)
 
 			day1, err := svc.PlanDay(ctx, userID, tt.start)
 			if err != nil {
 				t.Fatalf("PlanDay(day1) error = %v", err)
 			}
 			for _, occ := range day1.Scheduled {
-				if occ.TaskID == groceryID {
-					t.Fatalf("grocery should not schedule on blocked day %s", day1.Date)
+				if occ.TaskID == taskID {
+					t.Fatalf("task should not schedule on blocked day %s", day1.Date)
 				}
 			}
-			if _, ok := day1.Reasons[groceryID]; !ok {
+			if _, ok := day1.Reasons[taskID]; !ok {
 				t.Fatal("expected a day-selection reason on day 1")
 			}
 
@@ -1088,14 +1109,14 @@ func TestSchedulerCalendarAwareDaySelection(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PlanDay(day2) error = %v", err)
 			}
-			var groceryDay string
+			var scheduledDay string
 			for _, occ := range day2.Scheduled {
-				if occ.TaskID == groceryID {
-					groceryDay = day2.Date
+				if occ.TaskID == taskID {
+					scheduledDay = day2.Date
 				}
 			}
-			if groceryDay != tt.wantGroceryDay {
-				t.Fatalf("grocery scheduled on %s, want %s", groceryDay, tt.wantGroceryDay)
+			if scheduledDay != tt.wantDay {
+				t.Fatalf("task scheduled on %s, want %s", scheduledDay, tt.wantDay)
 			}
 		})
 	}
