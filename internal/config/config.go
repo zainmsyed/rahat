@@ -11,6 +11,7 @@ type Config struct {
 	DatabasePath string
 	LogLevel     slog.Level
 	WebOrigin    string
+	WebStaticDir string
 }
 
 func Load() Config {
@@ -26,6 +27,7 @@ func Load() Config {
 		DatabasePath: getenv("DATABASE_PATH", "./var/rahat.sqlite3"),
 		LogLevel:     parseLogLevel(getenv("LOG_LEVEL", "info")),
 		WebOrigin:    getenv("WEB_ORIGIN", "http://localhost:5200"),
+		WebStaticDir: getenv("WEB_STATIC_DIR", ""),
 	}
 }
 

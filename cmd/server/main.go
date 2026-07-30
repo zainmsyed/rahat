@@ -33,6 +33,7 @@ import (
 	taskpkg "github.com/rahat/rahat/internal/tasks"
 	"github.com/rahat/rahat/internal/tokens"
 	usr "github.com/rahat/rahat/internal/users"
+	"github.com/rahat/rahat/internal/web"
 	webhooktg "github.com/rahat/rahat/internal/webhooks/telegram"
 )
 
@@ -299,7 +300,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           withCORS(mux, cfg.WebOrigin, devOrigins, cfg.AppEnv),
+		Handler:           web.NewStaticHandler(cfg.WebStaticDir, withCORS(mux, cfg.WebOrigin, devOrigins, cfg.AppEnv)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

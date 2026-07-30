@@ -1,9 +1,9 @@
 # Story 031: Serve static frontend assets from the Go backend
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature  
 **Created:** 2026-07-26  
-**Last accessed:** 2026-07-26  
+**Last accessed:** 2026-07-30  
 **Completed:** —
 
 ---
@@ -31,12 +31,12 @@ Running the server with `WEB_STATIC_DIR=./web/build` serves the landing page at 
 ---
 
 ## Checklist
-- [ ] Add a `WEB_STATIC_DIR` config option for the path to built static files.
-- [ ] Implement a static-file handler that serves files from `WEB_STATIC_DIR` on `/`.
-- [ ] Ensure API and ops routes are registered before the static handler so they take precedence.
-- [ ] Add a catch-all fallback to `index.html` for unmatched non-API routes to support SvelteKit client-side routing.
-- [ ] Verify `/healthz` and `/readyz` still return 200 when static serving is enabled.
-- [ ] Manually smoke-test `/`, `/login`, and `/lookahead?token=...` with a local build.
+- [x] Add a `WEB_STATIC_DIR` config option for the path to built static files.
+- [x] Implement a static-file handler that serves files from `WEB_STATIC_DIR` on `/`.
+- [x] Ensure API and ops routes are registered before the static handler so they take precedence.
+- [x] Add a catch-all fallback to `index.html` for unmatched non-API routes to support SvelteKit client-side routing.
+- [x] Verify `/healthz` and `/readyz` still return 200 when static serving is enabled.
+- [x] Manually smoke-test `/`, `/login`, and `/lookahead?token=...` with a local build.
 
 ---
 
@@ -45,3 +45,4 @@ Running the server with `WEB_STATIC_DIR=./web/build` serves the landing page at 
 ---
 
 ## Completion Summary
+Added `WEB_STATIC_DIR` to `internal/config/config.go` and implemented `internal/web/static.go` to serve built SvelteKit files. The handler serves existing files (including hashed assets under `/_app`) and falls back to `index.html` for any non-API path, enabling SvelteKit client-side routing. Known API prefixes (`/healthz`, `/readyz`, `/auth`, `/onboarding`, `/tasks`, `/calendar`, `/schedule`, `/lookahead`, `/telegram`, `/webhooks`) are passed through to the existing mux. `cmd/server/main.go` wraps the CORS-enabled mux with the static handler when `WEB_STATIC_DIR` is set. Added `internal/web/static_test.go` covering file serving, index.html fallback, API passthrough, non-GET passthrough, and the disabled case. All Go tests pass, and a manual smoke test confirmed `/healthz` and `/readyz` return 200 while `/`, `/login`, `/lookahead?token=...`, and `/_app/version.json` are served correctly.
