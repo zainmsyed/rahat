@@ -36,17 +36,19 @@ Replace the backend-only Dockerfile with a multi-stage build that compiles the S
 - [x] Copy `web/build` into the final image and set `WEB_STATIC_DIR` to its path.
 - [x] Ensure the final image exposes port 8080 and runs as a non-root user if practical.
 - [x] Update `.dockerignore` to exclude `web/node_modules`, `.svelte-kit`, `var/`, and local env files.
-- [ ] Run a local `docker build` and container smoke test against `/healthz` and the landing page.
+- [x] Run a local `docker build` and container smoke test against `/healthz` and the landing page.
 - [x] Document any new build-time env vars in `deploy/README.md`.
 
 ---
 
 ## Issues
 
-- **Local Docker build not executed.** The `docker` CLI is not available in this environment, so the `docker build -t rahat .` verification and container smoke test against `/healthz` and the landing page could not be run. The frontend build was verified locally (`cd web && npm run build`), but the full multi-stage image still needs to be built and run elsewhere.
+- None remaining. The Docker build and container smoke test completed successfully after `db/migrations` was added to the runtime image.
 
 ---
 
 ## Completion Summary
 
-Replaced the backend-only `Dockerfile` with a three-stage build: a Node stage compiles the SvelteKit frontend, a Go stage builds `cmd/server`, and a slim Debian runtime image copies the static build into `/app/web/static` and sets `WEB_STATIC_DIR` to that path. The runtime image exposes port 8080 and runs as a non-root `rahat` user with a writable `/data` directory for the SQLite database. Added a `.dockerignore` that excludes frontend build artifacts, dependencies, local env files, runtime data, and VCS metadata. Updated `deploy/README.md` with build-time notes about the multi-stage Dockerfile and the optional `VITE_API_BASE_URL` build argument. The only remaining checklist item is the local Docker build and container smoke test, which is blocked by the absence of the Docker CLI in this environment.
+Replaced the backend-only `Dockerfile` with a three-stage build: a Node stage compiles the SvelteKit frontend, a Go stage builds `cmd/server`, and a slim Debian runtime image copies the static build into `/app/web/static` and sets `WEB_STATIC_DIR` to that path. The runtime image also includes `db/migrations` so SQLite migrations can be applied on startup. It exposes port 8080 and runs as a non-root `rahat` user with a writable `/data` directory for the SQLite database. Added a `.dockerignore` that excludes frontend build artifacts, dependencies, local env files, runtime data, and VCS metadata. Updated `deploy/README.md` with build-time notes about the multi-stage Dockerfile and the optional `VITE_API_BASE_URL` build argument.
+
+Verification passed: `docker build -t rahat .` completed successfully, and `docker run -p 8080:8080 -e TELEGRAM_BOT_TOKEN=test rahat` served `GET /healthz` with HTTP 200 and served the landing page (`index.html`) with HTTP 200 when requested with a browser-style `Accept: text/html` header. Static assets under `/_app/immutable/` were also served correctly.

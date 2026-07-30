@@ -22,6 +22,7 @@ RUN go mod download
 
 COPY cmd ./cmd
 COPY internal ./internal
+COPY db ./db
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/rahat-api ./cmd/server
 
 # --- Stage 3: production runtime image ---
@@ -41,6 +42,7 @@ ENV APP_ENV=production \
     WEB_STATIC_DIR=/app/web/static
 
 COPY --from=go-builder /out/rahat-api /usr/local/bin/rahat-api
+COPY --from=go-builder /app/db/migrations /app/db/migrations
 COPY --from=web-builder /app/web/build /app/web/static
 
 RUN mkdir -p /data && chown rahat:rahat /data
