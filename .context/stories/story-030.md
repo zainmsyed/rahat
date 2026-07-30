@@ -1,10 +1,10 @@
 # Story 030: Configure SvelteKit for static export and origin-relative API calls
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** feature  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-30  
-**Completed:** —
+**Completed:** 2026-07-30
 
 ---
 
