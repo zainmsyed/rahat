@@ -3,22 +3,30 @@
 **Last updated:** 2026-07-26
 
 ## Planning brief
-Apply the sage/cream design system from `.context/intake/references/rahat design file.html` and `.context/intake/references/rahat.html` to all existing SvelteKit web surfaces. Replace the current ad-hoc blue/Inter styling with the defined tokens, typography, components, and screen layouts so the web experience matches the designed warmth of the product.
+Add production-ready single-container Docker deployment for Rahat on the existing Coolify/Hetzner infrastructure. The container should build and serve both the Go backend and the SvelteKit frontend from the same origin, keep Telegram on long polling for now, and persist the SQLite database on a mounted volume.
 
 ## Source files
-- .context/intake/prd/rahat-prd.md
-- .context/intake/references/rahat design file.html
-- .context/intake/references/rahat.html
+- .context/intake/prd/rahat-prd.md (14465 bytes)
+- .context/intake/references/rahat design file.html (66635 bytes)
+- .context/intake/references/rahat.html (45120 bytes)
 
 ## Distilled notes
-### Scope of the replan
-- All existing SvelteKit pages and shared components are in scope: landing (`+page.svelte`), login, onboarding (invite-code entry, profile, tasks, Telegram connection, Google Calendar connection, review), task management, and the today/tomorrow lookahead page.
-- The design system uses a sage primary green (`#7a9b76`), warm cream background (`#faf7f2`), near-black ink (`#1f1d1a`), DM Serif Display for display type, Outfit for body/UI type, 520 px max-width centered cards for standalone flows, and a named 8 pt spacing/radius/shadow scale.
-- Reusable components defined in the reference: buttons (primary, secondary, text), inputs, select, tiles, toggles, sliders, connect tiles, summary boxes, info boxes, progress bars, and screen shells.
-- Tone and behavior remain unchanged; this is a visual redesign and component-alignment pass, not a functional rewrite.
+### .context/intake/prd/rahat-prd.md
+- Hosting: Coolify on a Hetzner VPS; SQLite in WAL mode; Telegram long polling is acceptable when no stable domain is available.
+- Architecture: Go backend, SvelteKit frontend, SQLite database.
+- Existing launch tooling (Story 011) already documents Coolify/Hetzner steps and required env vars, but the repo currently has only a backend-only Dockerfile.
+- The frontend is intentionally lightweight (onboarding + routine maintenance + passive lookahead), so serving static files from the backend is viable.
 
-### Safe default assumptions
-- Start with global design tokens and layout primitives, then apply the shell to onboarding, then to authenticated maintenance surfaces, then to the landing/lookahead pages.
-- Keep each page's existing logic and API contracts; only change markup, styles, and shared component usage.
-- No new pages are added unless required by the design reference.
-- Story numbers continue from 020; existing stories 001–019 are preserved as history.
+### Deployment decisions (clarified)
+- **Single container** is preferred over split backend/frontend services.
+- **Coolify can deploy the single Dockerfile** as one service.
+- **Telegram stays on long polling** in v1, so the container does not require a public HTTPS webhook path.
+- **Frontend static files will be served by the Go backend** from the same origin, making API calls origin-relative.
+
+## Planning rules
+- Treat listed source files as user-authored planning inputs unless they are explicitly marked as generated artifacts.
+- Vazir-generated files in .context/stories/ are replan context, not primary intake.
+- Read all text-based planning sources before asking questions.
+- Ask only implementation-blocking delta questions after reviewing this brief and any raw files you actually need.
+- State safe default assumptions briefly so the user can correct them.
+- Surface contradictions instead of resolving them silently.

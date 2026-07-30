@@ -1,12 +1,12 @@
 # Rahat — Plan
 
 **Created:** 2026-07-07  
-**Last updated:** 2026-07-25
+**Last updated:** 2026-07-26
 
 ---
 
 ## What we're building
-Rahat is a greenfield per-user assistant that schedules recurring household tasks around time budgets, calendar constraints, and stated priorities for overwhelmed parents, starting with new mothers and mothers with multiple young children. Multiple beta testers have isolated accounts, while household sharing remains out of scope. v1 uses a Go + SQLite backend, Telegram for the interactive daily loop and self-service web sign-in recovery, long polling as the default transport with webhook mode as an optional domain-backed upgrade, read-only Google Calendar integration, and lightweight SvelteKit web surfaces for onboarding, authenticated routine maintenance, and a passive today/tomorrow lookahead page. Email recap delivery remains deferred.
+Rahat is a greenfield per-user assistant that schedules recurring household tasks around time budgets, calendar constraints, and stated priorities for overwhelmed parents, starting with new mothers and mothers with multiple young children. Multiple beta testers have isolated accounts, while household sharing remains out of scope. v1 uses a Go + SQLite backend, Telegram for the interactive daily loop and self-service web sign-in recovery, long polling as the default transport with webhook mode as an optional domain-backed upgrade, read-only Google Calendar integration, and lightweight SvelteKit web surfaces for onboarding, authenticated routine maintenance, and a passive today/tomorrow lookahead page. The production deployment is a single Docker container on Coolify/Hetzner that serves both the backend and the built static frontend from the same origin. Email recap delivery remains deferred.
 
 ## What we're not building (v1 scope)
 - Multi-user household assignment
@@ -39,6 +39,9 @@ Use revocable browser sessions as the authorization boundary for each isolated b
 ### Feature 7: Onboarding outcome confirmation
 After onboarding persists routines and generates the first schedule, confirm the outcome both on screen and in the tester's linked Telegram chat. The Telegram message should summarize saved routines and actual scheduled windows, report overflow honestly, and explain the `/edit` return path. Planned in Story 015.
 
+### Feature 8: Single-container production deployment
+Package the Go backend and the built SvelteKit frontend into one Docker image that can be deployed on Coolify/Hetzner, serve all web surfaces from the same origin, persist SQLite on a mounted volume, and keep Telegram on long polling for v1. Implemented by Stories 030–033.
+
 ## Story queue
 | Story | Title | Status | Blocks |
 |---|---|---|---|
@@ -68,9 +71,13 @@ After onboarding persists routines and generates the first schedule, confirm the
 | 024 | Onboarding tasks page and TaskEditor redesign | not-started | 020, 021 |
 | 025 | Onboarding connection pages redesign | not-started | 020, 021 |
 | 026 | Onboarding review page redesign | not-started | 020, 021, 023, 024, 025 |
-| 027 | Login page redesign | not-started | 020 |
-| 028 | Task management page redesign | not-started | 020 |
-| 029 | Lookahead and landing pages redesign | not-started | 020 |
+| 027 | Login page redesign | complete | 020 |
+| 028 | Task management page redesign | complete | 020 |
+| 029 | Lookahead and landing pages redesign | complete | 020 |
+| 030 | Configure SvelteKit for static export and origin-relative API calls | not-started | 020, 029 |
+| 031 | Serve static frontend assets from the Go backend | not-started | 030 |
+| 032 | Build a single-container Dockerfile for backend and frontend | not-started | 030, 031 |
+| 033 | Update Coolify deployment docs for single-container long-polling deployment | not-started | 032 |
 
 ## Replanning log
 - 2026-07-07: Initial plan created from the PRD plus clarified scope decisions: greenfield repo, Telegram as the interactive loop, email as recap-only, onboarding and read-only web view retained, SMS removed from v1.
@@ -84,3 +91,4 @@ After onboarding persists routines and generates the first schedule, confirm the
 - 2026-07-25: Added Story 015 so onboarding has a visible outcome in the primary product channel. Successful completion will send one idempotent Telegram summary based on persisted routines and the actual first schedule, including honest overflow/skipped feedback and the `/edit` return instruction; on-screen completion remains available and Telegram delivery failure must not roll back saved onboarding data.
 - 2026-07-25: Replanned scheduler robustness after end-to-end testing showed the engine piles every newly-due task onto the first day and cascades overflow forward. Added Stories 016–019: 016 fixes the per-window budget split so feasible combinations fit; 017 spreads recurring tasks across days/weeks according to cadence and priority; 018 makes dates and windows timezone-aware; 019 uses calendar blocks to select lighter days and balance load. The scheduler is the core product for new and overwhelmed mothers, so these stories are sequenced to make it genuinely plan around her life.
 - 2026-07-26: Replanned UI work after reviewing the intake design references. Existing stories 001–019 are preserved as history. Added Stories 020–029 to apply the sage/cream design system (green primary `#7a9b76`, cream background, DM Serif + Outfit typography, 520 px centered cards, and named components) to every existing SvelteKit surface: global tokens and shell, onboarding flow, login, task management, lookahead, and landing page. No functional behavior or API contracts change; this is a visual redesign and component-alignment pass.
+- 2026-07-26: Added containerized deployment stories 030–033 after clarifying that the target is a single Docker image on Coolify/Hetzner, Telegram remains on long polling for v1, and the built SvelteKit frontend should be served by the Go backend from the same origin. The existing backend-only Dockerfile and deploy docs will be superseded by these stories without renumbering or retiring prior work.
