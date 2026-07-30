@@ -6,32 +6,22 @@ import (
 	"strings"
 )
 
-var apiPrefixes = []string{
-	"/healthz",
-	"/readyz",
-	"/auth",
-	"/onboarding",
-	"/tasks",
-	"/calendar",
-	"/schedule",
-	"/lookahead",
-	"/telegram",
-	"/webhooks",
-}
-
-func isAPIPath(requestPath string) bool {
-	for _, prefix := range apiPrefixes {
-		if requestPath == prefix || strings.HasPrefix(requestPath, prefix+"/") {
-			return true
-		}
+// prefersHTML reports whether the request is best treated as a browser page
+// navigation. Only requests that explicitly include "text/html" in their Accept
+// header are considered page navigations; requests with no Accept header or
+// with JSON/API Accept headers are forwarded to the API mux.
+func prefersHTML(r *http.Request) bool {
+	accept := r.Header.Get("Accept")
+	if accept == "" {
+		return false
 	}
-	return false
+	return strings.Contains(accept, "text/html")
 }
 
 // NewStaticHandler returns a handler that serves files from staticDir.
-// Requests matching known API paths are forwarded to next. If the requested
-// file does not exist, it falls back to index.html so a client-side router
-// can take over.
+// Existing files are served directly. When a file does not exist and the
+// request prefers HTML, index.html is served so the client-side router can
+// take over. All other requests are forwarded to next.
 func NewStaticHandler(staticDir string, next http.Handler) http.Handler {
 	if staticDir == "" {
 		return next
@@ -51,11 +41,6 @@ func NewStaticHandler(staticDir string, next http.Handler) http.Handler {
 			requestPath = "/"
 		}
 
-		if isAPIPath(requestPath) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		file, err := root.Open(requestPath)
 		if err == nil {
 			defer file.Close()
@@ -66,6 +51,11 @@ func NewStaticHandler(staticDir string, next http.Handler) http.Handler {
 			}
 		}
 
-		http.ServeFile(w, r, path.Join(staticDir, "index.html"))
+		if prefersHTML(r) {
+			http.ServeFile(w, r, path.Join(staticDir, "index.html"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }

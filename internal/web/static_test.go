@@ -33,8 +33,9 @@ func TestNewStaticHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to index.html for unknown non-API paths", func(t *testing.T) {
+	t.Run("falls back to index.html for unknown HTML requests", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/login", nil)
+		req.Header.Set("Accept", "text/html")
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK {
@@ -45,13 +46,40 @@ func TestNewStaticHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("passes API paths to next handler", func(t *testing.T) {
-		for _, path := range []string{"/healthz", "/readyz", "/auth/session", "/tasks", "/lookahead/plan"} {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
+	t.Run("falls back to index.html for overlapping frontend routes when Accept is HTML", func(t *testing.T) {
+		for _, p := range []string{"/tasks", "/onboarding/telegram"} {
+			req := httptest.NewRequest(http.MethodGet, p, nil)
+			req.Header.Set("Accept", "text/html")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("path %s: expected status 200, got %d", p, rr.Code)
+			}
+			if got := rr.Body.String(); got != "<html>app</html>" {
+				t.Fatalf("path %s: expected index.html body, got %q", p, got)
+			}
+		}
+	})
+
+	t.Run("passes overlapping routes to API when Accept is JSON", func(t *testing.T) {
+		for _, p := range []string{"/tasks", "/onboarding/telegram"} {
+			req := httptest.NewRequest(http.MethodGet, p, nil)
+			req.Header.Set("Accept", "application/json")
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 			if rr.Code != http.StatusTeapot {
-				t.Fatalf("path %s: expected status 418, got %d", path, rr.Code)
+				t.Fatalf("path %s: expected status 418, got %d", p, rr.Code)
+			}
+		}
+	})
+
+	t.Run("passes API paths to next handler", func(t *testing.T) {
+		for _, p := range []string{"/healthz", "/readyz", "/auth/session", "/lookahead/plan"} {
+			req := httptest.NewRequest(http.MethodGet, p, nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusTeapot {
+				t.Fatalf("path %s: expected status 418, got %d", p, rr.Code)
 			}
 		}
 	})

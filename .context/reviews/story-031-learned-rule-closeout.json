@@ -1,0 +1,11 @@
+{
+  "note": "One strong reusable rule came out of the story-031 review; the test-gap finding is too specific to generalize.",
+  "candidates": [
+    {
+      "text": "When serving a static SPA and backend API from the same origin, use the `Accept` header (or explicit file existence) to route browser page navigation to `index.html` and API calls to the backend, rather than path allowlists that can overlap with client-side routes.",
+      "confidence": "high",
+      "sources": ["review finding"],
+      "rationale": "A hardcoded API-prefix allowlist intercepted `/tasks` and `/onboarding/telegram`, causing the browser to receive JSON instead of the app. Checking for `text/html` in `Accept` correctly separated page loads from API fetches."
+    }
+  ]
+}
