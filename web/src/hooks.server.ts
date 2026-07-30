@@ -1,6 +1,5 @@
 import { redirect, type Handle } from '@sveltejs/kit';
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { apiBaseUrl } from '$lib/api/config';
 const authOptionalPrefixes = ['/login', '/lookahead', '/onboarding'];
 const protectedPrefixes = ['/', '/tasks'];
 

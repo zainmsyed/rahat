@@ -1,0 +1,17 @@
+{
+  "note": "Two reusable rule candidates came out of the story-030 review findings; no fallow or complaint signal was present.",
+  "candidates": [
+    {
+      "text": "When moving from server-rendered SvelteKit to a static export, replace every server-side auth/session check with a client-side guard so protected routes are not exposed as static HTML.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "Switching to `adapter-static` disabled `hooks.server.ts` in production, so `/tasks` lost its server-side redirect. Adding a `+layout.ts` client-side load guard restored that protection."
+    },
+    {
+      "text": "Centralize environment-dependent values such as API base URLs in one module and import them everywhere, rather than duplicating env fallbacks across client and server code.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "`hooks.server.ts` had its own `apiBaseUrl` fallback that drifted from `config.ts`. Importing the canonical value removed the duplication and kept dev behavior consistent."
+    }
+  ]
+}
