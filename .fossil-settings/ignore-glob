@@ -1,1 +1,1 @@
-node_modules/*,web/node_modules/*,web/.svelte-kit/*,web/build/*,web/dist/*,web/coverage/*,var/*,.env,.env.local,web/.env,web/.env.local,*.log
+node_modules/*,web/node_modules/*,web/.svelte-kit/*,web/build/*,web/dist/*,web/coverage/*,var/*,.env,.env.local,web/.env,web/.env.local,*.log,server
