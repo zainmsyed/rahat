@@ -1,10 +1,10 @@
 # Story 031: Serve static frontend assets from the Go backend
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** feature  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-07-30  
-**Completed:** —
+**Completed:** 2026-07-30
 
 ---
 
