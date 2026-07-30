@@ -1,0 +1,28 @@
+# VCS metadata
+.git/
+.fslckout
+.fossil-settings/
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# Frontend build artifacts and dependencies
+node_modules/
+web/node_modules/
+web/.svelte-kit/
+web/build/
+
+# Runtime data and logs
+var/
+tmp/
+*.log
+
+# Editor and OS files
+*.swp
+.DS_Store
+Thumbs.db
+
+# Compiled binaries
+/server

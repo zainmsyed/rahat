@@ -2,10 +2,19 @@
 
 This deploy guide assumes a single-app backend on Coolify or a small Hetzner VM.
 
+## Build-time notes
+
+The `Dockerfile` builds the frontend inside a Node stage. By default the static frontend uses relative API calls, which works because the same container serves the API and the static SPA. If you need the built frontend to point at a separate API origin, pass `VITE_API_BASE_URL` as a build argument:
+
+```
+docker build --build-arg VITE_API_BASE_URL=https://api.example.com -t rahat .
+```
+
 ## Required secrets
 
 - `APP_ENV=production`
 - `DATABASE_PATH=/data/rahat.sqlite3`
+- `WEB_STATIC_DIR=/app/web/static` (already set in the Dockerfile; only override if you mount static files separately)
 - `WEB_ORIGIN=https://<your-web-origin>`
 - `LOOKAHEAD_TOKEN_SECRET=<32+ random chars>`
 - `WEB_SESSION_SECRET=<32+ random chars>`
@@ -36,7 +45,7 @@ This deploy guide assumes a single-app backend on Coolify or a small Hetzner VM.
 
 ## Coolify
 
-1. Build from the repo root using the existing backend Dockerfile.
+1. Build from the repo root using the multi-stage `Dockerfile`. It compiles the SvelteKit frontend and bakes the resulting static files into the Go runtime image.
 2. Mount persistent storage at `/data`.
 3. Set the environment variables above.
 4. Add scheduled commands in Coolify for:
