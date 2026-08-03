@@ -46,7 +46,8 @@ func newTestEditHandler(t *testing.T) (*EditCommandHandler, *editFakeBot, *auth.
 	userService := usr.NewService(usr.NewRepository(sqlDB))
 	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), "test-secret", 30*24*time.Hour)
 	bot := &editFakeBot{}
-	handler := NewEditCommandHandler(authService, userService, bot, "http://127.0.0.1:5200", nil)
+	handler := NewEditCommandHandler(authService, userService, bot, "http://localhost:8080", nil)
+	handler.LinkHost = "192.168.1.20:8080"
 	return handler, bot, authService, userService
 }
 
@@ -83,11 +84,11 @@ func TestEditCommandIssuesLinkForLinkedChat(t *testing.T) {
 	if button.Text != "Manage my routines" {
 		t.Fatalf("button text = %q, want Manage my routines", button.Text)
 	}
-	if !strings.HasPrefix(button.URL, "http://127.0.0.1:5200/login?token=") {
+	if !strings.HasPrefix(button.URL, "http://192.168.1.20:8080/login?token=") {
 		t.Fatalf("unexpected button url: %q", button.URL)
 	}
 
-	rawToken := strings.TrimPrefix(button.URL, "http://127.0.0.1:5200/login?token=")
+	rawToken := strings.TrimPrefix(button.URL, "http://192.168.1.20:8080/login?token=")
 	session, _, err := authService.ExchangeAccessGrant(ctx, rawToken)
 	if err != nil {
 		t.Fatalf("ExchangeAccessGrant() error = %v", err)
@@ -132,11 +133,11 @@ func TestEditCommandDifferentChatsIssueDifferentLinks(t *testing.T) {
 		t.Fatal("expected different links for different chats")
 	}
 
-	sessionOne, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[0], "http://127.0.0.1:5200/login?token="))
+	sessionOne, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[0], "http://192.168.1.20:8080/login?token="))
 	if err != nil {
 		t.Fatalf("exchange first error = %v", err)
 	}
-	sessionTwo, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[1], "http://127.0.0.1:5200/login?token="))
+	sessionTwo, _, err := authService.ExchangeAccessGrant(ctx, strings.TrimPrefix(tokens[1], "http://192.168.1.20:8080/login?token="))
 	if err != nil {
 		t.Fatalf("exchange second error = %v", err)
 	}
@@ -179,7 +180,7 @@ func TestEditCommandLinkSingleUse(t *testing.T) {
 
 	_ = handler.HandleMessage(ctx, &Message{Text: "/edit", Chat: &Chat{ID: 333, Type: "private"}})
 	button := bot.messages[0].ReplyMarkup.InlineKeyboard[0][0]
-	rawToken := strings.TrimPrefix(button.URL, "http://127.0.0.1:5200/login?token=")
+	rawToken := strings.TrimPrefix(button.URL, "http://192.168.1.20:8080/login?token=")
 
 	if _, _, err := authService.ExchangeAccessGrant(ctx, rawToken); err != nil {
 		t.Fatalf("first exchange error = %v", err)
@@ -208,7 +209,8 @@ func TestEditCommandFallbackToPlainText(t *testing.T) {
 	}
 
 	bot := &failingThenOkBot{failRemaining: 1}
-	handler := NewEditCommandHandler(authService, userService, bot, "http://127.0.0.1:5200", nil)
+	handler := NewEditCommandHandler(authService, userService, bot, "http://localhost:8080", nil)
+	handler.LinkHost = "192.168.1.20:8080"
 	if err := handler.HandleMessage(ctx, &Message{Text: "/edit", Chat: &Chat{ID: 444, Type: "private"}}); err != nil {
 		t.Fatalf("HandleMessage() error = %v", err)
 	}
@@ -220,11 +222,82 @@ func TestEditCommandFallbackToPlainText(t *testing.T) {
 	if msg.ReplyMarkup != nil {
 		t.Fatal("expected no inline keyboard in fallback message")
 	}
-	if !strings.Contains(msg.Text, "http://127.0.0.1:5200/login?token=") {
+	if !strings.Contains(msg.Text, "http://192.168.1.20:8080/login?token=") {
 		t.Fatalf("fallback message missing link: %q", msg.Text)
 	}
 	if !strings.Contains(msg.Text, "Do not forward it") {
 		t.Fatalf("fallback message missing warning: %q", msg.Text)
+	}
+}
+
+func TestEditCommandRequiresExplicitHostForLocalOrigin(t *testing.T) {
+	handler, bot, _, userService := newTestEditHandler(t)
+	ctx := context.Background()
+	handler.LinkHost = ""
+
+	user, err := userService.Create(ctx, usr.User{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := userService.LinkTelegramChat(ctx, user.ID, "555"); err != nil {
+		t.Fatalf("LinkTelegramChat() error = %v", err)
+	}
+
+	if err := handler.HandleMessage(ctx, &Message{Text: "/edit", Chat: &Chat{ID: 555, Type: "private"}}); err != nil {
+		t.Fatalf("HandleMessage() error = %v", err)
+	}
+	if len(bot.messages) != 1 {
+		t.Fatalf("expected one configuration guidance message, got %d", len(bot.messages))
+	}
+	if bot.messages[0].ReplyMarkup != nil {
+		t.Fatal("expected no button when local link host is not configured")
+	}
+	if !strings.Contains(bot.messages[0].Text, "TELEGRAM_LINK_HOST") {
+		t.Fatalf("expected host configuration guidance, got %q", bot.messages[0].Text)
+	}
+}
+
+func TestEditCommandRejectsLoopbackLinkHost(t *testing.T) {
+	handler, bot, _, userService := newTestEditHandler(t)
+	ctx := context.Background()
+	handler.LinkHost = "127.0.0.1:8080"
+
+	user, err := userService.Create(ctx, usr.User{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := userService.LinkTelegramChat(ctx, user.ID, "557"); err != nil {
+		t.Fatalf("LinkTelegramChat() error = %v", err)
+	}
+
+	if err := handler.HandleMessage(ctx, &Message{Text: "/edit", Chat: &Chat{ID: 557, Type: "private"}}); err != nil {
+		t.Fatalf("HandleMessage() error = %v", err)
+	}
+	if len(bot.messages) != 1 || bot.messages[0].ReplyMarkup != nil {
+		t.Fatalf("expected configuration guidance without a button, got %+v", bot.messages)
+	}
+}
+
+func TestEditCommandUsesPublicWebOrigin(t *testing.T) {
+	handler, bot, _, userService := newTestEditHandler(t)
+	ctx := context.Background()
+	handler.webOrigin = "https://rahat.example.com"
+	handler.LinkHost = ""
+
+	user, err := userService.Create(ctx, usr.User{DisplayName: "Tester", Timezone: "UTC", DailyTimeBudgetMinutes: 30})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := userService.LinkTelegramChat(ctx, user.ID, "556"); err != nil {
+		t.Fatalf("LinkTelegramChat() error = %v", err)
+	}
+
+	if err := handler.HandleMessage(ctx, &Message{Text: "/edit", Chat: &Chat{ID: 556, Type: "private"}}); err != nil {
+		t.Fatalf("HandleMessage() error = %v", err)
+	}
+	button := bot.messages[0].ReplyMarkup.InlineKeyboard[0][0]
+	if !strings.HasPrefix(button.URL, "https://rahat.example.com/login?token=") {
+		t.Fatalf("unexpected public button URL: %q", button.URL)
 	}
 }
 

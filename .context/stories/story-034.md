@@ -1,6 +1,6 @@
 # Story 034: Restore clickable Telegram `/edit` management links
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** bug  
 **Created:** 2026-08-03  
 **Last accessed:** 2026-08-03  
@@ -37,16 +37,22 @@ A linked Telegram user sends `/edit` and receives a clickable **Manage my routin
 
 ## Checklist
 - [ ] Reproduce the current `/edit` response with a linked test chat and identify why Telegram falls back from the inline button.
-- [ ] Ensure the generated management URL uses an explicit configured reachable IP address and port for local/LAN deployments, or the configured public host in production, and is valid for Telegram's URL button requirements.
-- [ ] Keep the inline **Manage my routines** button as the primary response and retain a safe plain-text fallback only when button delivery fails.
-- [ ] Add or update tests for configured host handling, clickable markup delivery, fallback behavior, and single-use access grants.
-- [ ] Update deployment examples/runbook with the local/LAN IP-address-and-port or public-host requirement for clickable `/edit` links.
+- [x] Ensure the generated management URL uses an explicit configured reachable IP address and port for local/LAN deployments, or the configured public host in production, and is valid for Telegram's URL button requirements.
+- [x] Keep the inline **Manage my routines** button as the primary response and retain a safe plain-text fallback only when button delivery fails.
+- [x] Add or update tests for configured host handling, clickable markup delivery, fallback behavior, and single-use access grants.
+- [x] Update deployment examples/runbook with the local/LAN IP-address-and-port or public-host requirement for clickable `/edit` links.
 - [ ] Manually verify `/edit` from a linked Telegram chat using a reachable host.
 
 ---
 
 ## Issues
 
+- **Live Telegram verification remains pending.** Automated tests and the documented host configuration cover the inline-button, fallback, and single-use behavior, but a real linked Telegram chat has not yet been used in this environment to confirm Telegram accepts the configured LAN IP URL and renders the button. User confirmation is required with `TELEGRAM_LINK_HOST=<reachable-ip:port>` and a phone on the same network.
+
 ---
 
 ## Completion Summary
+
+Implemented explicit reachable-host handling for Telegram `/edit` links. Local/loopback `WEB_ORIGIN` values now require `TELEGRAM_LINK_HOST` with a non-loopback IP address and port, such as `192.168.1.20:8080`; automatic interface selection and `localhost` links are no longer used. Public HTTP(S) origins continue to work without the override. The inline **Manage my routines** button remains the primary response, with the existing plain-text fallback retained only when Telegram rejects button delivery. Added tests covering LAN IP URLs, public origins, missing/invalid local hosts, inline markup, fallback delivery, access-grant exchange, and single-use behavior. Updated deployment documentation and `.env.example` with the phone-reachable IP/port requirement.
+
+The Telegram package tests and full Go test suite pass in the Go 1.25 Docker toolchain. A live Telegram chat verification is still required before closeout.

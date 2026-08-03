@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/rahat/rahat/internal/auth"
-	"github.com/rahat/rahat/internal/netutil"
 	"github.com/rahat/rahat/internal/users"
 )
 
@@ -64,6 +64,13 @@ func (h *EditCommandHandler) HandleMessage(ctx context.Context, msg *Message) er
 		return nil
 	}
 
+	base, err := h.buildLinkBase()
+	if err != nil {
+		h.logger.Warn("edit command: management link host is not configured", "chat_id", chatID, "error", err)
+		h.sendReply(ctx, chatID, "We couldn't create a reachable management link right now. Please ask the operator to configure TELEGRAM_LINK_HOST with the reachable IP address and port.")
+		return nil
+	}
+
 	grant, rawToken, err := h.auth.IssueAccessGrant(ctx, user.ID, DefaultTelegramAccessGrantTTL)
 	if err != nil {
 		h.logger.Warn("edit command: failed to issue access grant", "user_id", user.ID, "chat_id", chatID, "error", err)
@@ -71,7 +78,7 @@ func (h *EditCommandHandler) HandleMessage(ctx context.Context, msg *Message) er
 		return nil
 	}
 
-	link := h.buildLink(rawToken)
+	link := base + "/login?token=" + url.QueryEscape(rawToken)
 	text := fmt.Sprintf(
 		"Here is your private link to manage your routines. It expires in %d minutes and can only be used once. Do not forward it.",
 		int(DefaultTelegramAccessGrantTTL.Minutes()),
@@ -123,24 +130,54 @@ func (h *EditCommandHandler) sendReply(ctx context.Context, chatID, text string)
 	return nil
 }
 
-func (h *EditCommandHandler) buildLink(rawToken string) string {
-	base := h.webOrigin
-	if parsed, err := url.Parse(base); err == nil {
-		if h.LinkHost != "" {
-			parsed.Host = h.LinkHost
-			base = parsed.String()
-		} else if parsed.Hostname() == "localhost" {
-			if ip := netutil.PrimaryLocalIPv4(); ip != "" {
-				host := ip
-				if port := parsed.Port(); port != "" {
-					host = host + ":" + port
-				}
-				parsed.Host = host
-				base = parsed.String()
-			}
-		}
+func (h *EditCommandHandler) buildLinkBase() (string, error) {
+	parsed, err := url.Parse(h.webOrigin)
+	if err != nil || parsed.Scheme == "" || parsed.Hostname() == "" {
+		return "", errors.New("WEB_ORIGIN must be an absolute HTTP(S) URL")
 	}
-	return base + "/login?token=" + url.QueryEscape(rawToken)
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", errors.New("WEB_ORIGIN must use http or https")
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	parsed.User = nil
+
+	if h.LinkHost != "" {
+		linkHost, err := parseLinkHost(h.LinkHost)
+		if err != nil {
+			return "", err
+		}
+		if isLocalHost(parsed.Hostname()) && !isUsableConfiguredIP(linkHost.Hostname()) {
+			return "", errors.New("TELEGRAM_LINK_HOST must be a reachable non-loopback IP address for a local WEB_ORIGIN")
+		}
+		parsed.Host = linkHost.Host
+	} else if isLocalHost(parsed.Hostname()) {
+		return "", errors.New("TELEGRAM_LINK_HOST is required when WEB_ORIGIN uses localhost or a loopback address")
+	}
+
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func parseLinkHost(value string) (*url.URL, error) {
+	if strings.Contains(value, "://") {
+		return nil, errors.New("TELEGRAM_LINK_HOST must be host:port without a scheme")
+	}
+	parsed, err := url.Parse("//" + strings.TrimSpace(value))
+	if err != nil || parsed.Hostname() == "" || parsed.Port() == "" || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
+		return nil, errors.New("TELEGRAM_LINK_HOST must include a reachable host and port")
+	}
+	return parsed, nil
+}
+
+func isLocalHost(host string) bool {
+	ip := net.ParseIP(host)
+	return strings.EqualFold(host, "localhost") || ip != nil && ip.IsLoopback()
+}
+
+func isUsableConfiguredIP(host string) bool {
+	ip := net.ParseIP(host)
+	return ip != nil && !ip.IsLoopback() && !ip.IsUnspecified() && !ip.IsMulticast()
 }
 
 func isEditCommand(text string) bool {

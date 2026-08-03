@@ -27,7 +27,8 @@ Telegram webhooks are optional and off by default. Leave `TELEGRAM_WEBHOOK_SECRE
 
 Optional variables:
 
-- `TELEGRAM_BOT_USERNAME=<username>` and `TELEGRAM_LINK_HOST=<host:port>` — bot links and local/LAN `/edit` link host override
+- `TELEGRAM_BOT_USERNAME=<username>` — optional bot username
+- `TELEGRAM_LINK_HOST=<reachable-ip:port>` — required when `WEB_ORIGIN` is localhost or a loopback address; use the phone-reachable LAN IP and port for local `/edit` links (for example `192.168.1.20:8080`)
 - `ONBOARDING_INVITE_CODE=rahat-beta` — custom onboarding invite code
 - `BACKUP_TARGET_URI=<file:///backups or s3://bucket/path>` — backup destination
 - `EMAIL_RECAP_OUTBOX_DIR=/data/email-outbox` — email recap file outbox
