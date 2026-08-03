@@ -126,7 +126,7 @@ describe('ProfilePage', () => {
 		expect(summary).toHaveTextContent('minutes per day');
 	});
 
-	it('renders proportional budget tick labels', async () => {
+	it('renders proportional budget tick labels aligned to the slider track', async () => {
 		getState.mockResolvedValue({
 			has_profile: false,
 			telegram_linked: false,
@@ -138,9 +138,28 @@ describe('ProfilePage', () => {
 		render(ProfilePage);
 		await waitFor(() => expect(screen.getByLabelText('Name *')).toBeInTheDocument());
 
-		[15, 60, 120, 240, 480].forEach((tick) => {
-			expect(screen.getByText(String(tick))).toBeInTheDocument();
+		const slider = screen.getByLabelText(/Daily task-time budget/i);
+		const tickContainer = slider.parentElement?.querySelector('.slider-ticks');
+		expect(tickContainer).toHaveClass('slider-ticks');
+
+		const ticks = [15, 60, 120, 240, 480];
+		const expectedPositions = [0, 9.6774193548, 22.5806451613, 48.3870967742, 100];
+		ticks.forEach((tick, index) => {
+			const label = tickContainer?.querySelector(`[data-budget-tick="${tick}"]`);
+			expect(label).toHaveTextContent(String(tick));
+			expect(Number.parseFloat(label?.getAttribute('style')?.match(/[\d.]+/)?.[0] ?? 'NaN')).toBeCloseTo(
+				expectedPositions[index],
+				8
+			);
 		});
+		expect(tickContainer?.querySelector('[data-budget-tick="15"]')).toHaveClass('first');
+		expect(tickContainer?.querySelector('[data-budget-tick="480"]')).toHaveClass('last');
+
+		for (const tick of ticks) {
+			await fireEvent.input(slider, { target: { value: String(tick) } });
+			expect(slider).toHaveValue(String(tick));
+			expect(screen.getByRole('status')).toHaveTextContent(String(tick));
+		}
 	});
 
 	it('shows validation errors and does not submit when required fields are invalid', async () => {

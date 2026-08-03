@@ -159,8 +159,10 @@
 				<div class="slider-ticks" aria-hidden="true">
 					{#each budgetTicks as tick, index}
 						<span
+							class="slider-tick"
 							class:first={index === 0}
 							class:last={index === budgetTicks.length - 1}
+							data-budget-tick={tick}
 							style="left: {tickPosition(tick)}%"
 						>
 							{tick}
@@ -301,6 +303,8 @@
 
 	.slider-ticks {
 		position: relative;
+		/* Native range thumbs center within the track's usable width, inset by half the thumb. */
+		margin-inline: 12px;
 		height: 18px;
 		font-size: 12px;
 		color: var(--ink-3);
