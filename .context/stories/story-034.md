@@ -1,10 +1,10 @@
 # Story 034: Restore clickable Telegram `/edit` management links
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** bug  
 **Created:** 2026-08-03  
 **Last accessed:** 2026-08-03  
-**Completed:** —
+**Completed:** 2026-08-03
 
 ---
 
