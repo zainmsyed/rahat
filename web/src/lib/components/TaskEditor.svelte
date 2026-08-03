@@ -3,12 +3,14 @@
 	import Input from '$lib/components/design/Input.svelte';
 	import Button from '$lib/components/design/Button.svelte';
 	import InfoBox from '$lib/components/design/InfoBox.svelte';
+	import DayPreferencePicker, { type DayPreferencePickerVariant } from '$lib/components/design/DayPreferencePicker.svelte';
 	import type { TaskDraft } from '$lib/api/onboarding';
 
 	export let draft: TaskDraft;
 	export let saving = false;
 	export let submitLabel = 'Save task';
 	export let error = '';
+	export let dayPickerVariant: DayPreferencePickerVariant = 'cards';
 
 	const dispatch = createEventDispatcher<{
 		save: { draft: TaskDraft };
@@ -18,10 +20,14 @@
 	let workingDraft: TaskDraft = cloneDraft(draft);
 
 	$: workingDraft = cloneDraft(draft);
+	$: if (workingDraft.day_preference === 'weekend' && (workingDraft.cadence_type !== 'count' || workingDraft.cadence_value > 2)) {
+		workingDraft = { ...workingDraft, cadence_type: 'count', cadence_value: Math.min(Math.max(workingDraft.cadence_value || 1, 1), 2) };
+	}
 
 	function cloneDraft(value: TaskDraft): TaskDraft {
 		return {
 			...value,
+			day_preference: value.day_preference ?? 'any',
 			subtasks: value.subtasks.map((subtask) => ({ ...subtask }))
 		};
 	}
@@ -119,6 +125,16 @@
 			<option value="any">Any time</option>
 		</select>
 	</label>
+
+	<div class="field">
+		<span class="field-label">Which days work best for this task?</span>
+		<DayPreferencePicker variant={dayPickerVariant} bind:value={workingDraft.day_preference} />
+	</div>
+	{#if workingDraft.day_preference === 'weekend'}
+		<InfoBox title="Weekend cadence updated">
+			Weekend tasks are planned per week — up to 2 times, once per weekend day.
+		</InfoBox>
+	{/if}
 
 	<section class="subtasks" aria-labelledby="subtasks-title">
 		<div class="subtasks-header">

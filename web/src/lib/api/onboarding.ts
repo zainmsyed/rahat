@@ -4,6 +4,7 @@ import { apiBaseUrl } from './config';
 export type CadenceType = 'interval' | 'count';
 export type Priority = 'high' | 'medium' | 'low';
 export type TimeOfDayPreference = 'any' | 'morning' | 'afternoon' | 'evening';
+export type DayPreference = 'any' | 'weekday' | 'weekend';
 
 export type OnboardingProfile = {
 	display_name: string;
@@ -32,6 +33,7 @@ export type OnboardingTask = {
 	cadence_value: number;
 	priority: Priority;
 	time_of_day_preference: TimeOfDayPreference;
+	day_preference: DayPreference;
 	is_multistep: boolean;
 	is_paused?: boolean;
 	archived_at?: string;
@@ -48,6 +50,7 @@ export type StarterTemplate = {
 	cadence_value: number;
 	priority: Priority;
 	time_of_day_preference: TimeOfDayPreference;
+	day_preference: DayPreference;
 	is_multistep: boolean;
 	subtasks: OnboardingSubtask[];
 };
@@ -96,6 +99,7 @@ export type TaskDraft = {
 	cadence_value: number;
 	priority: Priority;
 	time_of_day_preference: TimeOfDayPreference;
+	day_preference: DayPreference;
 	subtasks: OnboardingSubtask[];
 };
 
@@ -217,6 +221,7 @@ export function emptyTaskDraft(): TaskDraft {
 		cadence_value: 1,
 		priority: 'medium',
 		time_of_day_preference: 'morning',
+		day_preference: 'any',
 		subtasks: []
 	};
 }

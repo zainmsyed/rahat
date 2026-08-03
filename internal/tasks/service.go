@@ -11,11 +11,28 @@ type Service struct {
 	repo *Repository
 }
 
+func ValidateTask(task Task) error {
+	switch task.DayPreference {
+	case "", DayPreferenceAny, DayPreferenceWeekday:
+		return nil
+	case DayPreferenceWeekend:
+		if task.CadenceType != CadenceTypeCount || task.CadenceValue < 1 || task.CadenceValue > 2 {
+			return fmt.Errorf("weekend tasks must use weekly count cadence of at most 2")
+		}
+		return nil
+	default:
+		return fmt.Errorf("day preference is not recognized")
+	}
+}
+
 func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
 func (s *Service) CreateTaskWithSubtasks(ctx context.Context, task Task, subtasks []Subtask) (TaskWithSubtasks, error) {
+	if err := ValidateTask(task); err != nil {
+		return TaskWithSubtasks{}, err
+	}
 	tx, err := s.repo.db.BeginTx(ctx, nil)
 	if err != nil {
 		return TaskWithSubtasks{}, fmt.Errorf("begin task create transaction: %w", err)
@@ -46,10 +63,16 @@ func (s *Service) CreateTaskWithSubtasks(ctx context.Context, task Task, subtask
 }
 
 func (s *Service) UpdateTask(ctx context.Context, task Task) (Task, error) {
+	if err := ValidateTask(task); err != nil {
+		return Task{}, err
+	}
 	return s.repo.UpdateTask(ctx, task)
 }
 
 func (s *Service) ReplaceTaskWithSubtasks(ctx context.Context, task Task, subtasks []Subtask) (TaskWithSubtasks, error) {
+	if err := ValidateTask(task); err != nil {
+		return TaskWithSubtasks{}, err
+	}
 	tx, err := s.repo.db.BeginTx(ctx, nil)
 	if err != nil {
 		return TaskWithSubtasks{}, fmt.Errorf("begin task replace transaction: %w", err)
@@ -215,6 +238,7 @@ func (s *Service) CreateTaskFromStarterTemplate(ctx context.Context, userID, tem
 			CadenceValue:        tmpl.CadenceValue,
 			Priority:            tmpl.Priority,
 			TimeOfDayPreference: tmpl.TimeOfDayPreference,
+			DayPreference:       tmpl.DayPreference,
 			IsMultistep:         tmpl.IsMultistep,
 		}
 		subtasks := make([]Subtask, 0, len(tmpl.Subtasks))

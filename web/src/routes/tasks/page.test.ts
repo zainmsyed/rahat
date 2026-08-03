@@ -22,6 +22,7 @@ vi.mock('$lib/api/tasks', () => ({
 		cadence_value: task.cadence_value,
 		priority: task.priority,
 		time_of_day_preference: task.time_of_day_preference,
+		day_preference: task.day_preference ?? 'any',
 		subtasks: task.subtasks.map((subtask) => ({ ...subtask }))
 	})
 }));
@@ -35,6 +36,7 @@ type ManagedTaskFixture = {
 	cadence_value: number;
 	priority: 'high' | 'medium' | 'low';
 	time_of_day_preference: 'any' | 'morning' | 'afternoon' | 'evening';
+	day_preference?: 'any' | 'weekday' | 'weekend';
 	is_multistep: boolean;
 	is_paused: boolean;
 	archived_at?: string;
@@ -102,6 +104,8 @@ describe('task management page', () => {
 		render(TasksPage);
 		await screen.findByText('Water plants');
 		await fireEvent.click(screen.getByRole('button', { name: 'Add a routine' }));
+		expect(screen.getByRole('button', { name: 'Any day' })).toBeDefined();
+		expect(screen.getByRole('button', { name: 'Weekdays' })).toBeDefined();
 		const name = screen.getByPlaceholderText('Example: Wipe down the kitchen');
 		await fireEvent.input(name, { target: { value: 'New routine' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Create routine' }));

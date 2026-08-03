@@ -76,6 +76,7 @@ type onboardingTaskRequest struct {
 	CadenceValue        int                         `json:"cadence_value"`
 	Priority            taskpkg.Priority            `json:"priority"`
 	TimeOfDayPreference taskpkg.TimeOfDayPreference `json:"time_of_day_preference"`
+	DayPreference       taskpkg.DayPreference         `json:"day_preference"`
 	Subtasks            []onboardingSubtaskRequest  `json:"subtasks"`
 }
 
@@ -135,6 +136,7 @@ type onboardingTaskResponse struct {
 	CadenceValue        int                         `json:"cadence_value"`
 	Priority            taskpkg.Priority            `json:"priority"`
 	TimeOfDayPreference taskpkg.TimeOfDayPreference `json:"time_of_day_preference"`
+	DayPreference       taskpkg.DayPreference         `json:"day_preference"`
 	IsMultistep         bool                        `json:"is_multistep"`
 	IsPaused            bool                        `json:"is_paused"`
 	ArchivedAt          string                      `json:"archived_at,omitempty"`
@@ -160,6 +162,7 @@ type starterTemplateResponse struct {
 	CadenceValue        int                         `json:"cadence_value"`
 	Priority            taskpkg.Priority            `json:"priority"`
 	TimeOfDayPreference taskpkg.TimeOfDayPreference `json:"time_of_day_preference"`
+	DayPreference       taskpkg.DayPreference         `json:"day_preference"`
 	IsMultistep         bool                        `json:"is_multistep"`
 	Subtasks            []starterSubtaskResponse    `json:"subtasks"`
 }
@@ -883,6 +886,12 @@ func validateTaskRequest(userID string, req onboardingTaskRequest) (taskpkg.Task
 	if !validTimeOfDay(req.TimeOfDayPreference) {
 		return taskpkg.Task{}, nil, errors.New("preferred time of day is not recognized")
 	}
+	if !validDayPreference(req.DayPreference) {
+		return taskpkg.Task{}, nil, errors.New("preferred days are not recognized")
+	}
+	if req.DayPreference == taskpkg.DayPreferenceWeekend && (req.CadenceType != taskpkg.CadenceTypeCount || req.CadenceValue > 2) {
+		return taskpkg.Task{}, nil, errors.New("weekend tasks can be planned at most 2 times each week")
+	}
 
 	subtasks := make([]taskpkg.Subtask, 0, len(req.Subtasks))
 	totalDuration := req.DurationMinutes
@@ -925,6 +934,7 @@ func validateTaskRequest(userID string, req onboardingTaskRequest) (taskpkg.Task
 		CadenceValue:        req.CadenceValue,
 		Priority:            req.Priority,
 		TimeOfDayPreference: req.TimeOfDayPreference,
+		DayPreference:       req.DayPreference,
 		IsMultistep:         len(subtasks) > 0,
 	}
 	return task, subtasks, nil
@@ -936,6 +946,10 @@ func validCadenceType(value taskpkg.CadenceType) bool {
 
 func validPriority(value taskpkg.Priority) bool {
 	return value == taskpkg.PriorityHigh || value == taskpkg.PriorityMedium || value == taskpkg.PriorityLow
+}
+
+func validDayPreference(value taskpkg.DayPreference) bool {
+	return value == "" || value == taskpkg.DayPreferenceAny || value == taskpkg.DayPreferenceWeekday || value == taskpkg.DayPreferenceWeekend
 }
 
 func validTimeOfDay(value taskpkg.TimeOfDayPreference) bool {
@@ -1016,7 +1030,7 @@ func toTaskResponse(taskDef taskpkg.TaskWithSubtasks) onboardingTaskResponse {
 	for _, subtask := range taskDef.Subtasks {
 		subtasks = append(subtasks, onboardingSubtaskResponse{ID: subtask.ID, Name: subtask.Name, DurationMinutes: subtask.DurationMinutes, TimeOfDayPreference: subtask.TimeOfDayPreference, DependencyType: subtask.DependencyType, MinGapAfterPreviousMinutes: subtask.GapRule.MinGapAfterPreviousMinutes})
 	}
-	resp := onboardingTaskResponse{ID: taskDef.Task.ID, Name: taskDef.Task.Name, Description: taskDef.Task.Description, DurationMinutes: taskDef.Task.DurationMinutes, CadenceType: taskDef.Task.CadenceType, CadenceValue: taskDef.Task.CadenceValue, Priority: taskDef.Task.Priority, TimeOfDayPreference: taskDef.Task.TimeOfDayPreference, IsMultistep: taskDef.Task.IsMultistep, IsPaused: taskDef.Task.IsPaused, Subtasks: subtasks}
+	resp := onboardingTaskResponse{ID: taskDef.Task.ID, Name: taskDef.Task.Name, Description: taskDef.Task.Description, DurationMinutes: taskDef.Task.DurationMinutes, CadenceType: taskDef.Task.CadenceType, CadenceValue: taskDef.Task.CadenceValue, Priority: taskDef.Task.Priority, TimeOfDayPreference: taskDef.Task.TimeOfDayPreference, DayPreference: taskDef.Task.DayPreference, IsMultistep: taskDef.Task.IsMultistep, IsPaused: taskDef.Task.IsPaused, Subtasks: subtasks}
 	if taskDef.Task.ArchivedAt != nil {
 		resp.ArchivedAt = taskDef.Task.ArchivedAt.Format(time.RFC3339)
 	}
@@ -1030,7 +1044,7 @@ func toStarterTemplateResponses(templates []taskpkg.StarterTaskTemplate) []start
 		for _, subtask := range tmpl.Subtasks {
 			subtasks = append(subtasks, starterSubtaskResponse{Name: subtask.Name, DurationMinutes: subtask.DurationMinutes, TimeOfDayPreference: subtask.TimeOfDayPreference, DependencyType: subtask.DependencyType, MinGapAfterPreviousMinutes: subtask.MinGapAfterPreviousMinutes})
 		}
-		result = append(result, starterTemplateResponse{ID: tmpl.ID, Slug: tmpl.Slug, Name: tmpl.Name, Description: tmpl.Description, DurationMinutes: tmpl.DurationMinutes, CadenceType: tmpl.CadenceType, CadenceValue: tmpl.CadenceValue, Priority: tmpl.Priority, TimeOfDayPreference: tmpl.TimeOfDayPreference, IsMultistep: tmpl.IsMultistep, Subtasks: subtasks})
+		result = append(result, starterTemplateResponse{ID: tmpl.ID, Slug: tmpl.Slug, Name: tmpl.Name, Description: tmpl.Description, DurationMinutes: tmpl.DurationMinutes, CadenceType: tmpl.CadenceType, CadenceValue: tmpl.CadenceValue, Priority: tmpl.Priority, TimeOfDayPreference: tmpl.TimeOfDayPreference, DayPreference: tmpl.DayPreference, IsMultistep: tmpl.IsMultistep, Subtasks: subtasks})
 	}
 	return result
 }

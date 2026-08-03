@@ -257,6 +257,78 @@ func TestPlanDayScenarios(t *testing.T) {
 	}
 }
 
+func TestDayPreferenceFiltersWeekendAndKeepsOverflowOnAllowedDay(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+	userService := users.NewService(users.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+	occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	blockRepo := store.NewCalendarBlockRepository(sqlDB)
+	svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+	user, err := userService.Create(ctx, users.User{DisplayName: "Day preference", Timezone: "UTC", DailyTimeBudgetMinutes: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Weekday task", DurationMinutes: 1, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning, DayPreference: tasks.DayPreferenceWeekday}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Weekend task", DurationMinutes: 10, CadenceType: tasks.CadenceTypeCount, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning, DayPreference: tasks.DayPreferenceWeekend}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.PlanDay(ctx, user.ID, time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Scheduled) != 0 || len(result.Overflowed) != 1 {
+		t.Fatalf("Saturday result = scheduled %d, overflow %d, want 0/1", len(result.Scheduled), len(result.Overflowed))
+	}
+	if result.Overflowed[0].ScheduledForDate != "2026-07-19" {
+		t.Fatalf("weekend overflow date = %s, want Sunday", result.Overflowed[0].ScheduledForDate)
+	}
+}
+
+func TestPlanDayUsesUserLocalDateForNonMidnightInstant(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+	userService := users.NewService(users.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+	occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	blockRepo := store.NewCalendarBlockRepository(sqlDB)
+	svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+	user, err := userService.Create(ctx, users.User{DisplayName: "Timezone day", Timezone: "America/Los_Angeles", DailyTimeBudgetMinutes: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = taskService.CreateTaskWithSubtasks(ctx, tasks.Task{UserID: user.ID, Name: "Sunday task", DurationMinutes: 10, CadenceType: tasks.CadenceTypeCount, CadenceValue: 1, Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning, DayPreference: tasks.DayPreferenceWeekend}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.PlanDay(ctx, user.ID, time.Date(2026, 8, 3, 0, 30, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Date != "2026-08-02" {
+		t.Fatalf("plan date = %s, want 2026-08-02", result.Date)
+	}
+	if len(result.Scheduled) != 1 {
+		t.Fatalf("scheduled = %d, want 1", len(result.Scheduled))
+	}
+}
+
 func seedNormalDay(ctx context.Context, t *testing.T, _ *sql.DB, userService *users.Service, taskService *tasks.Service, occurrenceService *occurrences.Service, _ *store.CalendarBlockRepository) string {
 	t.Helper()
 	user, err := userService.Create(ctx, users.User{DisplayName: "Normal", Timezone: "UTC", DailyTimeBudgetMinutes: 60})

@@ -37,6 +37,14 @@ type SubtaskGapRule struct {
 	MinGapAfterPreviousMinutes int
 }
 
+type DayPreference string
+
+const (
+	DayPreferenceAny     DayPreference = "any"
+	DayPreferenceWeekday DayPreference = "weekday"
+	DayPreferenceWeekend DayPreference = "weekend"
+)
+
 type Task struct {
 	ID                  string
 	UserID              string
@@ -47,6 +55,7 @@ type Task struct {
 	CadenceValue        int
 	Priority            Priority
 	TimeOfDayPreference TimeOfDayPreference
+	DayPreference       DayPreference
 	IsMultistep         bool
 	IsPaused            bool
 	ArchivedAt          *time.Time
@@ -81,6 +90,7 @@ type StarterTaskTemplate struct {
 	CadenceValue        int
 	Priority            Priority
 	TimeOfDayPreference TimeOfDayPreference
+	DayPreference       DayPreference
 	IsMultistep         bool
 	SortOrder           int
 	Subtasks            []StarterSubtaskTemplate

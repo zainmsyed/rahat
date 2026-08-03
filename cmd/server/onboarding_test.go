@@ -26,6 +26,25 @@ import (
 	usr "github.com/rahat/rahat/internal/users"
 )
 
+func TestValidateTaskRequestDayPreference(t *testing.T) {
+	base := onboardingTaskRequest{
+		Name: "Weekend reset", DurationMinutes: 20, CadenceType: taskpkg.CadenceTypeCount, CadenceValue: 2,
+		Priority: taskpkg.PriorityMedium, TimeOfDayPreference: taskpkg.TimeOfDayAny, DayPreference: taskpkg.DayPreferenceWeekend,
+	}
+	if task, _, err := validateTaskRequest("user-1", base); err != nil || task.DayPreference != taskpkg.DayPreferenceWeekend {
+		t.Fatalf("valid weekend task = %+v, err = %v", task, err)
+	}
+	base.CadenceType = taskpkg.CadenceTypeInterval
+	if _, _, err := validateTaskRequest("user-1", base); err == nil {
+		t.Fatal("expected weekend interval cadence to be rejected")
+	}
+	base.CadenceType = taskpkg.CadenceTypeCount
+	base.CadenceValue = 3
+	if _, _, err := validateTaskRequest("user-1", base); err == nil {
+		t.Fatal("expected weekend cadence above two to be rejected")
+	}
+}
+
 type fakeCalendarOAuthClient struct {
 	authURL string
 	token   calendarpkg.OAuthToken

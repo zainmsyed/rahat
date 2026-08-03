@@ -23,6 +23,27 @@ func newTestServices(t *testing.T) (*sql.DB, *tasks.Service, *usr.Service) {
 	return sqlDB, tasks.NewService(tasks.NewRepository(sqlDB)), usr.NewService(usr.NewRepository(sqlDB))
 }
 
+func TestValidateTaskDayPreference(t *testing.T) {
+	tests := []struct {
+		name    string
+		task    tasks.Task
+		wantErr bool
+	}{
+		{name: "any defaults", task: tasks.Task{DayPreference: tasks.DayPreferenceAny}},
+		{name: "weekday allows interval", task: tasks.Task{DayPreference: tasks.DayPreferenceWeekday, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1}},
+		{name: "weekend allows one or two weekly occurrences", task: tasks.Task{DayPreference: tasks.DayPreferenceWeekend, CadenceType: tasks.CadenceTypeCount, CadenceValue: 2}},
+		{name: "weekend rejects interval", task: tasks.Task{DayPreference: tasks.DayPreferenceWeekend, CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1}, wantErr: true},
+		{name: "weekend rejects more than two", task: tasks.Task{DayPreference: tasks.DayPreferenceWeekend, CadenceType: tasks.CadenceTypeCount, CadenceValue: 3}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tasks.ValidateTask(tt.task); (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateTask() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestReplaceTaskWithSubtasksCreatesTask(t *testing.T) {
 	_, taskService, userService := newTestServices(t)
 

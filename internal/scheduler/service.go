@@ -40,8 +40,13 @@ func localDayInTimezone(day time.Time, timezone string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("load timezone %q: %w", timezone, err)
 	}
-	utcDay := day.UTC()
-	return time.Date(utcDay.Year(), utcDay.Month(), utcDay.Day(), 0, 0, 0, 0, loc), nil
+	// Callers normally pass a canonical date label as UTC midnight. Preserve that
+	// calendar date; convert non-midnight instants into the user's local date first.
+	localDay := day.UTC()
+	if day.Hour() != 0 || day.Minute() != 0 || day.Second() != 0 || day.Nanosecond() != 0 {
+		localDay = day.In(loc)
+	}
+	return time.Date(localDay.Year(), localDay.Month(), localDay.Day(), 0, 0, 0, 0, loc), nil
 }
 
 func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (PlanResult, error) {
@@ -98,7 +103,7 @@ func (s *Service) PlanDay(ctx context.Context, userID string, day time.Time) (Pl
 
 	persistedOverflowed := make([]occurrences.Occurrence, 0, len(overflowed))
 	for _, candidate := range overflowed {
-		nextDay := planDate.AddDate(0, 0, 1)
+		nextDay := nextAllowedDate(planDate, candidate.Task.DayPreference)
 		candidate.Occurrence.Status = occurrences.StatusPending
 		candidate.Occurrence.ScheduledForDate = store.FormatDate(nextDay)
 		candidate.Occurrence.ScheduledTimeOfDay = candidate.Window
@@ -235,7 +240,7 @@ func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User
 	for _, candidate := range overflowed {
 		occurrence := candidate.Occurrence
 		occurrence.Status = occurrences.StatusPending
-		occurrence.ScheduledForDate = store.FormatDate(planDate.AddDate(0, 0, 1))
+		occurrence.ScheduledForDate = store.FormatDate(nextAllowedDate(planDate, candidate.Task.DayPreference))
 		occurrence.ScheduledTimeOfDay = candidate.Window
 		occurrence.RolloverCount++
 		previewOverflowed = append(previewOverflowed, occurrence)
@@ -295,7 +300,7 @@ func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWith
 	var candidates []scheduledCandidate
 	for _, open := range append(backlog, current...) {
 		taskDef, subtaskDef, ok := findDefinition(taskDefs, open.TaskID, open.SubtaskID)
-		if !ok {
+		if !ok || !dayPreferenceAllows(taskDef.Task, planDate) {
 			continue
 		}
 		window := effectiveWindow(taskDef, subtaskDef)
@@ -493,6 +498,26 @@ func effectiveWindow(taskDef tasks.Task, subtaskDef *tasks.Subtask) tasks.TimeOf
 	return tasks.TimeOfDayMorning
 }
 
+func dayPreferenceAllows(task tasks.Task, day time.Time) bool {
+	weekday := day.Weekday()
+	switch task.DayPreference {
+	case tasks.DayPreferenceWeekday:
+		return weekday >= time.Monday && weekday <= time.Friday
+	case tasks.DayPreferenceWeekend:
+		return weekday == time.Saturday || weekday == time.Sunday
+	default:
+		return true
+	}
+}
+
+func nextAllowedDate(day time.Time, preference tasks.DayPreference) time.Time {
+	next := day.AddDate(0, 0, 1)
+	for !dayPreferenceAllows(tasks.Task{DayPreference: preference}, next) {
+		next = next.AddDate(0, 0, 1)
+	}
+	return next
+}
+
 func taskScheduledOnDate(taskDef tasks.TaskWithSubtasks, history []occurrences.Occurrence, planDateStr string, planDate time.Time, constraintsByDate map[string]calendarConstraints, reasons map[string]string) bool {
 	horizonEnd := planDate.AddDate(0, 0, 6)
 	for _, d := range taskScheduleDates(taskDef, history, planDate, horizonEnd, constraintsByDate, reasons) {
@@ -551,10 +576,16 @@ func intervalTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurre
 		maxDate = horizonEnd
 	}
 	for d := defaultTarget; !d.After(maxDate); d = d.AddDate(0, 0, 1) {
-		candidates = append(candidates, store.FormatDate(d))
+		if dayPreferenceAllows(taskDef.Task, d) {
+			candidates = append(candidates, store.FormatDate(d))
+		}
 	}
 
-	chosen := chooseBestDates(candidates, taskDef.Task.DurationMinutes, constraintsByDate, 1, []string{defaultDate})
+	preferredDates := []string{}
+	if dayPreferenceAllows(taskDef.Task, defaultTarget) {
+		preferredDates = []string{defaultDate}
+	}
+	chosen := chooseBestDates(candidates, taskDef.Task.DurationMinutes, constraintsByDate, 1, preferredDates)
 	if len(chosen) == 0 {
 		return nil
 	}
@@ -614,7 +645,7 @@ func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrence
 	defaultDates := []string{}
 	for i := 0; i < remaining; i++ {
 		candidate := start.AddDate(0, 0, i*spacing)
-		if candidate.Before(planDate) {
+		if candidate.Before(planDate) || !dayPreferenceAllows(taskDef.Task, candidate) {
 			continue
 		}
 		if !candidate.Before(weekEnd) || candidate.After(horizonEnd) {
@@ -626,7 +657,7 @@ func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrence
 	// Deadline pressure: if we have run out of room in the week/horizon, schedule
 	// today so the cadence commitment is not silently missed.
 	daysLeft := int(weekEnd.Sub(planDate).Hours() / 24)
-	if len(defaultDates) == 0 && remaining >= daysLeft {
+	if len(defaultDates) == 0 && remaining >= daysLeft && dayPreferenceAllows(taskDef.Task, planDate) {
 		return []string{store.FormatDate(planDate)}
 	}
 
@@ -634,7 +665,9 @@ func countTaskScheduleDates(taskDef tasks.TaskWithSubtasks, history []occurrence
 	// replaced by lighter days.
 	candidatePool := []string{}
 	for d := planDate; d.Before(weekEnd) && !d.After(horizonEnd); d = d.AddDate(0, 0, 1) {
-		candidatePool = append(candidatePool, store.FormatDate(d))
+		if dayPreferenceAllows(taskDef.Task, d) {
+			candidatePool = append(candidatePool, store.FormatDate(d))
+		}
 	}
 
 	chosen := chooseBestDates(candidatePool, taskDef.Task.DurationMinutes, constraintsByDate, remaining, defaultDates)

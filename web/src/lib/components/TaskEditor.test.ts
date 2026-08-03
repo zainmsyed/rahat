@@ -26,6 +26,23 @@ describe('TaskEditor', () => {
 		expect(screen.getByText('Cancel')).toBeDefined();
 	});
 
+	it('switches weekend tasks to weekly cadence capped at two', async () => {
+		render(TaskEditor, { props: { draft: emptyTaskDraft() } });
+
+		await fireEvent.click(screen.getByRole('button', { name: /Weekends only/ }));
+
+		expect((screen.getByLabelText('How often should Rahat plan this?') as HTMLSelectElement).value).toBe('count');
+		expect((screen.getByDisplayValue('1') as HTMLInputElement).value).toBe('1');
+		expect(screen.getByText('Weekend tasks are planned per week — up to 2 times, once per weekend day.')).toBeDefined();
+	});
+
+	it('renders the compact day picker variant', () => {
+		render(TaskEditor, { props: { draft: emptyTaskDraft(), dayPickerVariant: 'segmented' } });
+
+		expect(screen.getByRole('button', { name: 'Any day' })).toBeDefined();
+		expect(screen.getByRole('button', { name: 'Weekdays' })).toBeDefined();
+	});
+
 	it('adds and removes subtasks', async () => {
 		render(TaskEditor, { props: { draft: emptyTaskDraft() } });
 

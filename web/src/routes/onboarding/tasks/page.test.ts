@@ -108,6 +108,8 @@ describe('TasksPage', () => {
 		await waitFor(() => expect(screen.getByText('Tidy up')).toBeInTheDocument());
 
 		expect(screen.getByText('Custom task')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /Any day is fine/ })).toBeDefined();
+		expect(screen.getByText('Planned Monday to Friday, never on weekends.')).toBeDefined();
 		expect(screen.getByRole('button', { name: /Review my setup/i })).toBeEnabled();
 	});
 

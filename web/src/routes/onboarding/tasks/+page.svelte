@@ -100,6 +100,7 @@
 			cadence_value: task.cadence_value,
 			priority: task.priority,
 			time_of_day_preference: task.time_of_day_preference,
+			day_preference: task.day_preference ?? 'any',
 			subtasks: task.subtasks.map((subtask) => ({ ...subtask }))
 		};
 	}

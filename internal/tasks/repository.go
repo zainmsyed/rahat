@@ -41,9 +41,9 @@ func createTask(ctx context.Context, exec dbExecutor, task Task) (Task, error) {
 	}
 
 	if _, err := exec.ExecContext(ctx, `
-		INSERT INTO tasks (id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, task.ID, task.UserID, task.Name, task.Description, task.DurationMinutes, task.CadenceType, task.CadenceValue, task.Priority, task.TimeOfDayPreference, task.IsMultistep, task.IsPaused, store.FormatTime(task.CreatedAt), store.FormatTime(task.UpdatedAt)); err != nil {
+		INSERT INTO tasks (id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, day_preference, is_multistep, is_paused, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, task.ID, task.UserID, task.Name, task.Description, task.DurationMinutes, task.CadenceType, task.CadenceValue, task.Priority, task.TimeOfDayPreference, normalizeDayPreference(task.DayPreference), task.IsMultistep, task.IsPaused, store.FormatTime(task.CreatedAt), store.FormatTime(task.UpdatedAt)); err != nil {
 		return Task{}, fmt.Errorf("create task: %w", err)
 	}
 
@@ -62,9 +62,9 @@ func updateTask(ctx context.Context, exec dbExecutor, task Task) (Task, error) {
 	task.UpdatedAt = time.Now().UTC()
 	if _, err := exec.ExecContext(ctx, `
 		UPDATE tasks
-		SET name = ?, description = ?, duration_minutes = ?, cadence_type = ?, cadence_value = ?, priority = ?, time_of_day_preference = ?, is_multistep = ?, is_paused = ?, updated_at = ?
+		SET name = ?, description = ?, duration_minutes = ?, cadence_type = ?, cadence_value = ?, priority = ?, time_of_day_preference = ?, day_preference = ?, is_multistep = ?, is_paused = ?, updated_at = ?
 		WHERE id = ?
-	`, task.Name, task.Description, task.DurationMinutes, task.CadenceType, task.CadenceValue, task.Priority, task.TimeOfDayPreference, task.IsMultistep, task.IsPaused, store.FormatTime(task.UpdatedAt), task.ID); err != nil {
+	`, task.Name, task.Description, task.DurationMinutes, task.CadenceType, task.CadenceValue, task.Priority, task.TimeOfDayPreference, normalizeDayPreference(task.DayPreference), task.IsMultistep, task.IsPaused, store.FormatTime(task.UpdatedAt), task.ID); err != nil {
 		return Task{}, fmt.Errorf("update task %s: %w", task.ID, err)
 	}
 	return task, nil
@@ -76,10 +76,10 @@ func (r *Repository) GetTaskByID(ctx context.Context, id string) (Task, error) {
 	var updatedAt string
 	var archivedAt sql.NullString
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, archived_at, created_at, updated_at
+		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, day_preference, is_multistep, is_paused, archived_at, created_at, updated_at
 		FROM tasks
 		WHERE id = ?
-	`, id).Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.IsMultistep, &task.IsPaused, &archivedAt, &createdAt, &updatedAt); err != nil {
+	`, id).Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.DayPreference, &task.IsMultistep, &task.IsPaused, &archivedAt, &createdAt, &updatedAt); err != nil {
 		return Task{}, fmt.Errorf("get task %s: %w", id, err)
 	}
 
@@ -141,7 +141,7 @@ func (r *Repository) listTasksByUser(ctx context.Context, userID string, include
 		where = `WHERE user_id = ?`
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, is_paused, archived_at, created_at, updated_at
+		SELECT id, user_id, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, day_preference, is_multistep, is_paused, archived_at, created_at, updated_at
 		FROM tasks
 		`+where+`
 		ORDER BY archived_at IS NOT NULL, created_at, id
@@ -157,7 +157,7 @@ func (r *Repository) listTasksByUser(ctx context.Context, userID string, include
 		var createdAt string
 		var updatedAt string
 		var archivedAt sql.NullString
-		if err := rows.Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.IsMultistep, &task.IsPaused, &archivedAt, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&task.ID, &task.UserID, &task.Name, &task.Description, &task.DurationMinutes, &task.CadenceType, &task.CadenceValue, &task.Priority, &task.TimeOfDayPreference, &task.DayPreference, &task.IsMultistep, &task.IsPaused, &archivedAt, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scan task row: %w", err)
 		}
 		if err := parseTaskTimes(&task, createdAt, updatedAt, archivedAt); err != nil {
@@ -307,6 +307,13 @@ func listSubtasksByTask(ctx context.Context, exec dbExecutor, taskID string) ([]
 	return subtasks, rows.Err()
 }
 
+func normalizeDayPreference(value DayPreference) DayPreference {
+	if value == DayPreferenceWeekday || value == DayPreferenceWeekend {
+		return value
+	}
+	return DayPreferenceAny
+}
+
 func normalizeSubtaskDependency(value SubtaskDependencyType) SubtaskDependencyType {
 	if value == SubtaskDependencySoftFollowup {
 		return SubtaskDependencySoftFollowup
@@ -316,7 +323,7 @@ func normalizeSubtaskDependency(value SubtaskDependencyType) SubtaskDependencyTy
 
 func (r *Repository) ListStarterTaskTemplates(ctx context.Context) ([]StarterTaskTemplate, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, slug, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, is_multistep, sort_order
+		SELECT id, slug, name, description, duration_minutes, cadence_type, cadence_value, priority, time_of_day_preference, day_preference, is_multistep, sort_order
 		FROM starter_task_templates
 		ORDER BY sort_order, slug
 	`)
@@ -328,7 +335,7 @@ func (r *Repository) ListStarterTaskTemplates(ctx context.Context) ([]StarterTas
 	var templates []StarterTaskTemplate
 	for rows.Next() {
 		var tmpl StarterTaskTemplate
-		if err := rows.Scan(&tmpl.ID, &tmpl.Slug, &tmpl.Name, &tmpl.Description, &tmpl.DurationMinutes, &tmpl.CadenceType, &tmpl.CadenceValue, &tmpl.Priority, &tmpl.TimeOfDayPreference, &tmpl.IsMultistep, &tmpl.SortOrder); err != nil {
+		if err := rows.Scan(&tmpl.ID, &tmpl.Slug, &tmpl.Name, &tmpl.Description, &tmpl.DurationMinutes, &tmpl.CadenceType, &tmpl.CadenceValue, &tmpl.Priority, &tmpl.TimeOfDayPreference, &tmpl.DayPreference, &tmpl.IsMultistep, &tmpl.SortOrder); err != nil {
 			return nil, fmt.Errorf("scan starter task template: %w", err)
 		}
 		templates = append(templates, tmpl)

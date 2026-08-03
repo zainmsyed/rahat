@@ -120,6 +120,7 @@
 		<section class="editor card">
 			<p class="eyebrow">{mode === 'edit' ? 'Edit routine' : 'New routine'}</p>
 			<TaskEditor
+				dayPickerVariant="segmented"
 				{draft}
 				{saving}
 				submitLabel={mode === 'edit' ? 'Save changes' : 'Create routine'}
