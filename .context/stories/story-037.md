@@ -69,10 +69,11 @@ A user creating or editing a task during onboarding sees a radio-card day picker
 ## Issues
 
 - The Go toolchain (`go`/`gofmt`) is not installed or available in this environment, so backend formatting and Go test execution could not be performed. Backend changes were reviewed statically; Go verification remains required before closeout.
-- Browser verification at desktop and narrow widths remains pending; the automated Svelte checks and tests pass.
+- Browser verification at desktop and narrow widths remains pending; a live preview is available at `http://localhost:5200/day-preference-preview` and `http://192.168.86.232:5200/day-preference-preview` for user confirmation. The preview uses the real TaskEditor and DayPreferencePicker components and is a temporary, explicitly approved preview route outside the original story scope.
+- The only remaining checklist blocker is verification, not implementation: the Go toolchain is unavailable for backend test execution, and the user must confirm the live UI and end-to-end weekday/weekend scheduling behavior.
 
 ---
 
 ## Completion Summary
 
-Implemented the weekday/weekend task preference across persistence, task types, starter-template transport, onboarding and task-management APIs, scheduler day filtering, and overflow rollover. Added the reusable `DayPreferencePicker` with guided radio-card and compact segmented variants, integrated it into the shared TaskEditor, and made weekend selection switch to weekly count cadence capped at two with an explanatory note. Added frontend component, editor, API, and page coverage plus backend validation and scheduler scenarios. `npm run check` passes with zero diagnostics and the web suite passes 24 files / 87 tests. Backend Go tests and manual browser verification remain pending because the Go toolchain is unavailable and UI behavior requires user confirmation.
+Implemented the weekday/weekend task preference across persistence, task types, starter-template transport, onboarding and task-management APIs, scheduler day filtering, and overflow rollover. Added the reusable `DayPreferencePicker` with guided radio-card and compact segmented variants, integrated it into the shared TaskEditor, and made weekend selection switch to weekly count cadence capped at two with an explanatory note. Added frontend component, editor, API, page, backend validation, and scheduler scenario coverage. `npm run check` passes with zero diagnostics and the web suite passes 24 files / 87 tests. The implementation is otherwise ready; the final checklist item remains unchecked pending user confirmation of the live preview at desktop and narrow widths, plus backend Go test execution when the toolchain is available.
