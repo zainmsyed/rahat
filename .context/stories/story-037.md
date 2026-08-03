@@ -1,6 +1,6 @@
 # Story 037: Add weekday/weekend day preference for tasks
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature  
 **Created:** 2026-08-03  
 **Last accessed:** 2026-08-03  
@@ -56,18 +56,23 @@ A user creating or editing a task during onboarding sees a radio-card day picker
 ---
 
 ## Checklist
-- [ ] Add the `day_preference` migration (default `any`) and thread the field through task and starter-template types, repositories, and services, with server-side validation that weekend tasks use weekly-count cadence of at most 2.
-- [ ] Filter scheduler day candidates by day preference (weekday = Mon–Fri, weekend = Sat–Sun) anchored in the user's timezone, keep overflow honest, and cover filtering and overflow with scheduler tests.
-- [ ] Expose `day_preference` in onboarding and task-management API create/update/read payloads with backend handler tests.
-- [ ] Create the `DayPreferencePicker` design primitive with `cards` and `segmented` variants, render/state tests, and a component registry entry.
-- [ ] Integrate the picker into TaskEditor with the weekend cadence auto-switch, the cap-at-2 rule, and the explanatory note; update TaskEditor tests.
-- [ ] Wire the onboarding tasks page (cards variant) and task-management page (segmented variant), mapping the field in drafts and updating both page-level tests.
+- [x] Add the `day_preference` migration (default `any`) and thread the field through task and starter-template types, repositories, and services, with server-side validation that weekend tasks use weekly-count cadence of at most 2.
+- [x] Filter scheduler day candidates by day preference (weekday = Mon–Fri, weekend = Sat–Sun) anchored in the user's timezone, keep overflow honest, and cover filtering and overflow with scheduler tests.
+- [x] Expose `day_preference` in onboarding and task-management API create/update/read payloads with backend handler tests.
+- [x] Create the `DayPreferencePicker` design primitive with `cards` and `segmented` variants, render/state tests, and a component registry entry.
+- [x] Integrate the picker into TaskEditor with the weekend cadence auto-switch, the cap-at-2 rule, and the explanatory note; update TaskEditor tests.
+- [x] Wire the onboarding tasks page (cards variant) and task-management page (segmented variant), mapping the field in drafts and updating both page-level tests.
 - [ ] Manually verify both pages at desktop and narrow widths and confirm weekday/weekend scheduling and overflow behavior end to end.
 
 ---
 
 ## Issues
 
+- The Go toolchain (`go`/`gofmt`) is not installed or available in this environment, so backend formatting and Go test execution could not be performed. Backend changes were reviewed statically; Go verification remains required before closeout.
+- Browser verification at desktop and narrow widths remains pending; the automated Svelte checks and tests pass.
+
 ---
 
 ## Completion Summary
+
+Implemented the weekday/weekend task preference across persistence, task types, starter-template transport, onboarding and task-management APIs, scheduler day filtering, and overflow rollover. Added the reusable `DayPreferencePicker` with guided radio-card and compact segmented variants, integrated it into the shared TaskEditor, and made weekend selection switch to weekly count cadence capped at two with an explanatory note. Added frontend component, editor, API, and page coverage plus backend validation and scheduler scenarios. `npm run check` passes with zero diagnostics and the web suite passes 24 files / 87 tests. Backend Go tests and manual browser verification remain pending because the Go toolchain is unavailable and UI behavior requires user confirmation.
