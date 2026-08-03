@@ -16,8 +16,14 @@
 - Scale: 1.0">
 
 ## Spacing
-- Base unit: —
-- Scale: 1.0">
+- Base unit: 4px <!-- source: story-036 -->
+- Scale: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64px <!-- source: story-036 -->
+
+## Visual style
+- Warm, minimal editorial UI with clear hierarchy and generous readable spacing. <!-- source: story-036 -->
+
+## Hard constraints
+- Preserve the existing onboarding viewport and responsive breakpoints; do not introduce horizontal overflow. <!-- source: story-036 -->
 
 ## Component conventions
-- —
+- Prefer existing shared onboarding shell, cards, InfoBox, and Button components; use design tokens instead of page-specific values. <!-- source: story-036 -->
