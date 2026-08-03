@@ -47,6 +47,7 @@ A linked Telegram user sends `/edit` and receives a clickable **Manage my routin
 
 ## Issues
 
+- **Initial no-response report was caused by the service not running.** There was no `rahat` container, so Telegram long polling was inactive. The current container is now running with the real bot token, `TELEGRAM_LINK_HOST=192.168.86.232:8080`, and the existing local database; logs confirm two `/edit` updates were received and inline link responses were issued. User confirmation is still required that the button is visible and opens from the phone.
 - **Live Telegram verification remains pending.** Automated tests and the documented host configuration cover the inline-button, fallback, and single-use behavior, but a real linked Telegram chat has not yet been used in this environment to confirm Telegram accepts the configured LAN IP URL and renders the button. User confirmation is required with `TELEGRAM_LINK_HOST=<reachable-ip:port>` and a phone on the same network.
 
 ---
