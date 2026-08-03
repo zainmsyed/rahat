@@ -74,7 +74,7 @@ describe('ProfilePage', () => {
 		const nameInput = screen.getByLabelText('Name *');
 		const timezoneInput = screen.getByLabelText('Timezone *');
 		const emailInput = screen.getByLabelText('Email for recaps (optional)');
-		const slider = screen.getByLabelText(/Daily task-time budget/i);
+		const slider = screen.getByRole('slider');
 
 		await fireEvent.input(nameInput, { target: { value: 'Alex' } });
 		await fireEvent.input(timezoneInput, { target: { value: 'America/New_York' } });
@@ -138,7 +138,8 @@ describe('ProfilePage', () => {
 		render(ProfilePage);
 		await waitFor(() => expect(screen.getByLabelText('Name *')).toBeInTheDocument());
 
-		const slider = screen.getByLabelText(/Daily task-time budget/i);
+		const slider = screen.getByRole('slider');
+		const budgetInput = screen.getByRole('spinbutton', { name: 'Daily task-time budget value' });
 		const tickContainer = slider.parentElement?.querySelector('.slider-ticks');
 		expect(tickContainer).toHaveClass('slider-ticks');
 
@@ -158,8 +159,13 @@ describe('ProfilePage', () => {
 		for (const tick of ticks) {
 			await fireEvent.input(slider, { target: { value: String(tick) } });
 			expect(slider).toHaveValue(String(tick));
+			expect(budgetInput).toHaveValue(tick);
 			expect(screen.getByRole('status')).toHaveTextContent(String(tick));
 		}
+
+		await fireEvent.input(budgetInput, { target: { value: '73' } });
+		expect(slider).toHaveValue('73');
+		expect(screen.getByRole('status')).toHaveTextContent('73');
 	});
 
 	it('shows validation errors and does not submit when required fields are invalid', async () => {

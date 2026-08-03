@@ -144,15 +144,27 @@
 			</div>
 
 			<div class="slider-field">
-				<label class="slider-label" for="daily-budget">
-					Daily task-time budget <span aria-hidden="true">*</span>
-				</label>
+				<div class="slider-heading">
+					<label class="slider-label" for="daily-budget">
+						Daily task-time budget <span aria-hidden="true">*</span>
+					</label>
+					<input
+						class="budget-number"
+						id="daily-budget-value"
+						type="number"
+						min="15"
+						max="480"
+						step="1"
+						bind:value={profileDraft.daily_time_budget_minutes}
+						aria-label="Daily task-time budget value"
+					/>
+				</div>
 				<input
 					id="daily-budget"
 					type="range"
 					min="15"
 					max="480"
-					step="15"
+					step="1"
 					bind:value={profileDraft.daily_time_budget_minutes}
 					aria-describedby="budget-summary budget-summary-hint"
 				/>
@@ -301,9 +313,34 @@
 		background: var(--primary-track);
 	}
 
+	.slider-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+
+	.budget-number {
+		width: 72px;
+		padding: 6px 8px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-md);
+		background: var(--paper);
+		color: var(--ink);
+		font: inherit;
+		text-align: right;
+	}
+
+	.budget-number:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 4px var(--primary-glow);
+	}
+
 	.slider-ticks {
 		position: relative;
 		/* Native range thumbs center within the track's usable width, inset by half the thumb. */
+		box-sizing: border-box;
+		width: calc(100% - 24px);
 		margin-inline: 12px;
 		height: 18px;
 		font-size: 12px;

@@ -41,11 +41,11 @@ On the onboarding profile step, moving the slider to each supported tick places 
 
 ## Issues
 
-- The supplied desktop screenshot showed the `60` thumb positioned to the right of the `60` label because native range thumbs are centered inside an inset usable track width. The tick-label row previously used the full input width, so its endpoints and intermediate positions did not match the thumb geometry. Narrow-width reproduction remains pending.
-- Automated verification is complete. Manual browser verification at desktop and narrow widths remains pending.
+- The supplied desktop screenshot showed the `60` thumb positioned to the right of the `60` label because native range thumbs are centered inside an inset usable track width. The tick-label row previously used the full input width, so its endpoints and intermediate positions did not match the thumb geometry. The corrected tick row now explicitly uses the 12px thumb-radius inset.
+- The budget control now also accepts direct whole-minute entry from 15 through 480; the slider and summary remain bound to the typed value. Manual browser verification at desktop and narrow widths remains pending.
 
 ---
 
 ## Completion Summary
 
-Updated the profile budget slider without changing the existing visual design. The tick-label row now uses the same 12px thumb-radius inset as the native range control, so the labels share the slider thumb's actual usable coordinate range while retaining numeric proportionality across 15–480 minutes. Added stable tick markers and a page-level regression test covering proportional positions, endpoint structure, every supported tick value, and summary updates. `npm test` passes all 23 web test files (79 tests), and `npm run check` reports no Svelte diagnostics. Manual desktop and narrow-width browser verification is still required before `/complete-story` readiness.
+Updated the profile budget control without changing the existing visual design. The tick-label row now explicitly uses the same 12px thumb-radius inset as the native range control, so the labels share the slider thumb's actual usable coordinate range while retaining numeric proportionality across 15–480 minutes. Added a compact direct-entry number field for any whole-minute value in that range; it stays synchronized with the slider and summary. Added stable tick markers and a page-level regression test covering proportional positions, endpoint structure, every supported tick value, direct entry, and summary updates. The profile test passes and `npm run check` reports no Svelte diagnostics. Manual desktop and narrow-width browser verification is still required before `/complete-story` readiness.
