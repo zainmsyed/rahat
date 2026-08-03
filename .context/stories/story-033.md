@@ -1,9 +1,9 @@
 # Story 033: Update Coolify deployment docs for single-container long-polling deployment
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** ops  
 **Created:** 2026-07-26  
-**Last accessed:** 2026-07-26  
+**Last accessed:** 2026-08-03  
 **Completed:** —
 
 ---
@@ -29,12 +29,12 @@ A teammate can follow `deploy/README.md` to create a Coolify service from the re
 ---
 
 ## Checklist
-- [ ] Update `deploy/README.md` Coolify section for a single service built from the repo-root `Dockerfile`.
-- [ ] Document the required `/data` volume mount for SQLite persistence.
-- [ ] List the minimum environment variables for long-polling mode and note which are optional.
-- [ ] Add or update `deploy/launch-smoke-checklist.md` to include static-asset serving and the landing page.
-- [ ] Create a `.env.example` file at the repo root that shows production env vars without secrets.
-- [ ] Verify the docs mention that Telegram webhooks remain optional and off by default.
+- [x] Update `deploy/README.md` Coolify section for a single service built from the repo-root `Dockerfile`.
+- [x] Document the required `/data` volume mount for SQLite persistence.
+- [x] List the minimum environment variables for long-polling mode and note which are optional.
+- [x] Add or update `deploy/launch-smoke-checklist.md` to include static-asset serving and the landing page.
+- [x] Create a `.env.example` file at the repo root that shows production env vars without secrets.
+- [x] Verify the docs mention that Telegram webhooks remain optional and off by default.
 
 ---
 
@@ -43,3 +43,5 @@ A teammate can follow `deploy/README.md` to create a Coolify service from the re
 ---
 
 ## Completion Summary
+
+Updated the deployment runbook for the single-container Coolify deployment. `deploy/README.md` now documents one service built from the repo-root Dockerfile, port 8080, a persistent `/data` mount for SQLite/WAL/runtime data, the minimum production environment variables, optional integrations, and long-polling as the default Telegram transport with webhooks off unless explicitly configured. Updated `deploy/launch-smoke-checklist.md` with landing-page, health, static-asset, persistence, onboarding, session, and long-polling checks. Replaced `.env.example` with a production-oriented, secret-free runtime configuration template.

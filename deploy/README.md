@@ -10,22 +10,30 @@ The `Dockerfile` builds the frontend inside a Node stage. By default the static 
 docker build --build-arg VITE_API_BASE_URL=https://api.example.com -t rahat .
 ```
 
-## Required secrets
+## Coolify environment variables
+
+Set these minimum runtime variables on the Coolify service:
 
 - `APP_ENV=production`
 - `DATABASE_PATH=/data/rahat.sqlite3`
-- `WEB_STATIC_DIR=/app/web/static` (already set in the Dockerfile; only override if you mount static files separately)
-- `WEB_ORIGIN=https://<your-web-origin>`
-- `LOOKAHEAD_TOKEN_SECRET=<32+ random chars>`
+- `WEB_ORIGIN=https://<your-domain>`
 - `WEB_SESSION_SECRET=<32+ random chars>`
-- `BACKUP_TARGET_URI=<file:///backups or s3://bucket/path>`
-- `TELEGRAM_BOT_TOKEN=<telegram bot token>`
-- `TELEGRAM_WEBHOOK_SECRET=<random webhook secret>`
-- `TELEGRAM_WEBHOOK_URL=https://<domain>/webhooks/telegram` (only for webhook mode)
-- `GOOGLE_CLIENT_ID=<google oauth client id>`
-- `GOOGLE_CLIENT_SECRET=<google oauth secret>`
-- `GOOGLE_REDIRECT_URL=https://<web-origin>/onboarding/calendar/callback`
-- `GOOGLE_CALENDAR_ID=primary` (optional)
+- `LOOKAHEAD_TOKEN_SECRET=<32+ random chars>`
+- `TELEGRAM_BOT_TOKEN=<telegram bot token>` — enables Telegram long polling
+
+The image already sets `RAHAT_HTTP_ADDR=:8080` and `WEB_STATIC_DIR=/app/web/static`; do not override them unless the deployment layout changes. `LOG_LEVEL=info` is the default.
+
+Telegram webhooks are optional and off by default. Leave `TELEGRAM_WEBHOOK_SECRET` and `TELEGRAM_WEBHOOK_URL` empty for long-polling mode. Only configure both when the service has a stable public HTTPS domain and you intentionally want webhook transport.
+
+Optional variables:
+
+- `TELEGRAM_BOT_USERNAME=<username>` and `TELEGRAM_LINK_HOST=<host:port>` — bot links and local/LAN `/edit` link host override
+- `ONBOARDING_INVITE_CODE=rahat-beta` — custom onboarding invite code
+- `BACKUP_TARGET_URI=<file:///backups or s3://bucket/path>` — backup destination
+- `EMAIL_RECAP_OUTBOX_DIR=/data/email-outbox` — email recap file outbox
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URL`, and `GOOGLE_CALENDAR_ID` — Google Calendar integration
+- `LOOKAHEAD_TOKEN_ISSUER_ENABLED=true` — controlled non-production helper only
+- `RAHAT_RESET_CONFIRM=reset-non-production` — explicit non-production reset only
 
 ## Beta session notes
 
@@ -45,17 +53,19 @@ docker build --build-arg VITE_API_BASE_URL=https://api.example.com -t rahat .
 
 ## Coolify
 
-1. Build from the repo root using the multi-stage `Dockerfile`. It compiles the SvelteKit frontend and bakes the resulting static files into the Go runtime image.
-2. Mount persistent storage at `/data`.
-3. Set the environment variables above.
-4. Add scheduled commands in Coolify for (these run inside the container, so use the compiled binary):
+1. Create one Coolify service from this repository. Select the repo-root `Dockerfile`; it builds both the SvelteKit frontend and Go backend into one image.
+2. Expose container port `8080`.
+3. Add a persistent storage mount from the Coolify volume to `/data`. SQLite, WAL files, and runtime backup/outbox data must live under this mount; do not use an ephemeral container filesystem.
+4. Set the minimum environment variables above. Do not configure a separate frontend service or frontend domain.
+5. Telegram starts in long-polling mode automatically when `TELEGRAM_BOT_TOKEN` is set and webhook settings are empty.
+6. Add scheduled commands in Coolify for (these run inside the container, so use the compiled binary):
    - `rahat-api ops:run-job schedule-daily`
    - `rahat-api ops:run-job telegram-daily`
    - `rahat-api ops:run-job telegram-window`
    - `rahat-api ops:run-job calendar-sync`
    - `rahat-api ops:run-job email-recap`
    - `rahat-api ops:run-job backup-daily`
-5. If Telegram webhook mode is configured, confirm the app serves `/webhooks/telegram` on the same domain in `TELEGRAM_WEBHOOK_URL`.
+7. If Telegram webhook mode is configured, confirm the app serves `/webhooks/telegram` on the same domain in `TELEGRAM_WEBHOOK_URL`.
 
 ## Hetzner VM
 
@@ -86,8 +96,9 @@ docker build --build-arg VITE_API_BASE_URL=https://api.example.com -t rahat .
 
 ## Telegram notes
 
-- Use long polling when there is no stable public domain.
-- Use webhook mode only when `TELEGRAM_WEBHOOK_URL` is a real HTTPS domain path ending in `/webhooks/telegram`.
+- Long polling is the default for this single-container deployment and does not require a public Telegram webhook URL.
+- Telegram webhooks remain optional and off by default. Use webhook mode only when `TELEGRAM_WEBHOOK_URL` is a real HTTPS domain path ending in `/webhooks/telegram`, with a matching `TELEGRAM_WEBHOOK_SECRET`.
+- With long polling enabled, confirm the startup log reports `"transport":"long_polling"` and that the bot receives a test `/start` or `/edit` message.
 
 ## Google notes
 
