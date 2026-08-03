@@ -1,27 +1,23 @@
 # Intake Brief
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-08-03
 
 ## Planning brief
-Add production-ready single-container Docker deployment for Rahat on the existing Coolify/Hetzner infrastructure. The container should build and serve both the Go backend and the SvelteKit frontend from the same origin, keep Telegram on long polling for now, and persist the SQLite database on a mounted volume.
+Add a day-of-week preference to tasks so users can say a task belongs on weekdays, weekends, or any day, both during onboarding and in post-onboarding task management. The scheduler must honor the preference as a hard day filter, computed in the user's timezone, with honest overflow when allowed days cannot fit the task.
 
 ## Source files
-- .context/intake/prd/rahat-prd.md (14465 bytes)
-- .context/intake/references/rahat design file.html (66635 bytes)
-- .context/intake/references/rahat.html (45120 bytes)
+- Interactive planning conversation (2026-08-03); no new intake documents.
+- Prior replan context: .context/stories/plan.md and existing story files.
 
 ## Distilled notes
-### .context/intake/prd/rahat-prd.md
-- Hosting: Coolify on a Hetzner VPS; SQLite in WAL mode; Telegram long polling is acceptable when no stable domain is available.
-- Architecture: Go backend, SvelteKit frontend, SQLite database.
-- Existing launch tooling (Story 011) already documents Coolify/Hetzner steps and required env vars, but the repo currently has only a backend-only Dockerfile.
-- The frontend is intentionally lightweight (onboarding + routine maintenance + passive lookahead), so serving static files from the backend is viable.
-
-### Deployment decisions (clarified)
-- **Single container** is preferred over split backend/frontend services.
-- **Coolify can deploy the single Dockerfile** as one service.
-- **Telegram stays on long polling** in v1, so the container does not require a public HTTPS webhook path.
-- **Frontend static files will be served by the Go backend** from the same origin, making API calls origin-relative.
+### Day-preference decisions (clarified 2026-08-03)
+- **Three options, user-facing wording:** "Any day is fine" (default), "Weekdays only", "Weekends only".
+- **New field** `day_preference` on tasks (`any` | `weekday` | `weekend`), mirroring the existing `TimeOfDayPreference` enum pattern; existing rows default to `any` with unchanged behavior.
+- **Hard scheduler constraint, not soft:** weekday tasks plan Mon–Fri only, weekend tasks Sat–Sun only, in the user's timezone; overflow is reported honestly rather than spilling onto forbidden days.
+- **Weekend cadence rule:** weekend tasks use weekly-count cadence capped at 2 (one per weekend day). Picking weekends in the editor auto-switches cadence to "a few times each week" with an explanatory note; editing an existing interval-cadence task to weekend auto-switches rather than failing validation. Interval cadence stays allowed for weekday tasks (the scheduler skips Sat/Sun).
+- **UI variants:** onboarding tasks page uses radio cards with plain-language hints; the task-management page uses a compact segmented control. Both come from one new `DayPreferencePicker` design primitive with a `variant` prop, surfaced through the shared TaskEditor.
+- **Weekend is fixed as Saturday/Sunday for v1**; per-user weekend definitions are out of scope.
+- Day-preference tags on task-list tiles are deferred as a possible follow-up story.
 
 ## Planning rules
 - Treat listed source files as user-authored planning inputs unless they are explicitly marked as generated artifacts.

@@ -1,7 +1,7 @@
 # Rahat — Plan
 
 **Created:** 2026-07-07  
-**Last updated:** 2026-07-26
+**Last updated:** 2026-08-03
 
 ---
 
@@ -78,6 +78,7 @@ Package the Go backend and the built SvelteKit frontend into one Docker image th
 | 031 | Serve static frontend assets from the Go backend | not-started | 030 |
 | 032 | Build a single-container Dockerfile for backend and frontend | not-started | 030, 031 |
 | 033 | Update Coolify deployment docs for single-container long-polling deployment | not-started | 032 |
+| 037 | Add weekday/weekend day preference for tasks | not-started | 003, 013, 024, 028 |
 
 ## Replanning log
 - 2026-07-07: Initial plan created from the PRD plus clarified scope decisions: greenfield repo, Telegram as the interactive loop, email as recap-only, onboarding and read-only web view retained, SMS removed from v1.
@@ -92,3 +93,4 @@ Package the Go backend and the built SvelteKit frontend into one Docker image th
 - 2026-07-25: Replanned scheduler robustness after end-to-end testing showed the engine piles every newly-due task onto the first day and cascades overflow forward. Added Stories 016–019: 016 fixes the per-window budget split so feasible combinations fit; 017 spreads recurring tasks across days/weeks according to cadence and priority; 018 makes dates and windows timezone-aware; 019 uses calendar blocks to select lighter days and balance load. The scheduler is the core product for new and overwhelmed mothers, so these stories are sequenced to make it genuinely plan around her life.
 - 2026-07-26: Replanned UI work after reviewing the intake design references. Existing stories 001–019 are preserved as history. Added Stories 020–029 to apply the sage/cream design system (green primary `#7a9b76`, cream background, DM Serif + Outfit typography, 520 px centered cards, and named components) to every existing SvelteKit surface: global tokens and shell, onboarding flow, login, task management, lookahead, and landing page. No functional behavior or API contracts change; this is a visual redesign and component-alignment pass.
 - 2026-07-26: Added containerized deployment stories 030–033 after clarifying that the target is a single Docker image on Coolify/Hetzner, Telegram remains on long polling for v1, and the built SvelteKit frontend should be served by the Go backend from the same origin. The existing backend-only Dockerfile and deploy docs will be superseded by these stories without renumbering or retiring prior work.
+- 2026-08-03: Added Story 037 after an interactive planning session on day-of-week task preferences. Users will mark a task as weekday-only, weekend-only, or any day (default, preserving current behavior) in both onboarding and task management. The scheduler treats it as a hard day-candidate filter in the user's timezone with honest overflow; weekend tasks use weekly-count cadence capped at 2. One new `DayPreferencePicker` design primitive renders as radio cards in onboarding and a segmented control on the task-management page. Stories 034–036 were completed earlier the same day without queue rows; they are preserved as history and not renumbered.
