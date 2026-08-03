@@ -1,0 +1,17 @@
+{
+  "note": "Two reusable rules emerged from the documentation work: keep .env.example production-oriented, and clearly separate minimum deployment variables from optional integrations in container runbooks.",
+  "candidates": [
+    {
+      "text": "`.env.example` files must reflect the production deployment template with placeholder secrets, not local development values or empty required fields.",
+      "confidence": "medium",
+      "sources": ["story"],
+      "rationale": "Story 033 replaced a development-oriented .env.example with a production template that uses /data, the public-domain placeholder, and explicit <32+ random chars> placeholders for secrets. This prevents operators from copying dev defaults into production."
+    },
+    {
+      "text": "Container deployment runbooks must explicitly list minimum required runtime variables separately from optional integrations and state the default operational mode.",
+      "confidence": "medium",
+      "sources": ["story", "review finding"],
+      "rationale": "The updated deploy/README.md separates the minimum Coolify variables from optional Telegram, Google, backup, and ops toggles, and explicitly defaults Telegram to long polling with webhooks off. This structure reduces misconfiguration when the deployment model changes."
+    }
+  ]
+}

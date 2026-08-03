@@ -18,7 +18,7 @@ Run these checks before letting testers rely on the environment. These commands 
 
 ## Telegram long polling
 - Set `TELEGRAM_BOT_TOKEN` and leave `TELEGRAM_WEBHOOK_SECRET` and `TELEGRAM_WEBHOOK_URL` empty.
-- Confirm startup logs report `transport":"long_polling"`.
+- Confirm startup logs report `"transport":"long_polling"`.
 - Link a test Telegram chat during onboarding and confirm the bot sends the welcome message.
 - Confirm the bot can send the daily list with:
   `docker exec rahat rahat-api ops:run-job telegram-daily`
