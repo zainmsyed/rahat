@@ -1,10 +1,10 @@
 # Story 032: Build a single-container Dockerfile for backend and frontend
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** ops  
 **Created:** 2026-07-26  
-**Last accessed:** 2026-07-30  
-**Completed:** —
+**Last accessed:** 2026-08-03  
+**Completed:** 2026-08-03
 
 ---
 
