@@ -166,6 +166,20 @@ describe('ProfilePage', () => {
 		await fireEvent.input(budgetInput, { target: { value: '73' } });
 		expect(slider).toHaveValue('73');
 		expect(screen.getByRole('status')).toHaveTextContent('73');
+
+		await fireEvent.input(budgetInput, { target: { value: '500' } });
+		expect(slider).toHaveValue('73');
+		expect(screen.getByRole('status')).toHaveTextContent('73');
+		await fireEvent.change(budgetInput, { target: { value: '500' } });
+		expect(budgetInput).toHaveValue(480);
+		expect(slider).toHaveValue('480');
+		expect(screen.getByRole('status')).toHaveTextContent('480');
+
+		await fireEvent.input(budgetInput, { target: { value: '73.5' } });
+		expect(slider).toHaveValue('480');
+		await fireEvent.change(budgetInput, { target: { value: '73.5' } });
+		expect(budgetInput).toHaveValue(74);
+		expect(slider).toHaveValue('74');
 	});
 
 	it('shows validation errors and does not submit when required fields are invalid', async () => {

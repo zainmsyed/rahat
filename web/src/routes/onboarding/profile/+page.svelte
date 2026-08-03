@@ -36,6 +36,7 @@
 		daily_time_budget_minutes: 45,
 		email: ''
 	};
+	let budgetInputValue = '45';
 
 	const budgetTicks = [15, 60, 120, 240, 480];
 	const MIN_BUDGET = 15;
@@ -43,6 +44,35 @@
 
 	function tickPosition(value: number) {
 		return ((value - MIN_BUDGET) / (MAX_BUDGET - MIN_BUDGET)) * 100;
+	}
+
+	function setBudget(value: number) {
+		profileDraft = { ...profileDraft, daily_time_budget_minutes: value };
+		budgetInputValue = String(value);
+	}
+
+	function handleSliderInput(event: Event) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		if (Number.isInteger(value) && value >= MIN_BUDGET && value <= MAX_BUDGET) {
+			setBudget(value);
+		}
+	}
+
+	function handleBudgetInput(event: Event) {
+		budgetInputValue = (event.currentTarget as HTMLInputElement).value;
+		const value = Number(budgetInputValue);
+		if (Number.isInteger(value) && value >= MIN_BUDGET && value <= MAX_BUDGET) {
+			setBudget(value);
+		}
+	}
+
+	function commitBudgetInput() {
+		const value = Number(budgetInputValue);
+		if (!Number.isFinite(value)) {
+			budgetInputValue = String(profileDraft.daily_time_budget_minutes);
+			return;
+		}
+		setBudget(Math.round(Math.min(MAX_BUDGET, Math.max(MIN_BUDGET, value))));
 	}
 
 	$: steps = buildOnboardingSteps(state, !!sessionToken);
@@ -68,6 +98,7 @@
 			state = await getState(sessionToken);
 			if (state.user) {
 				profileDraft = { ...state.user };
+				budgetInputValue = String(state.user.daily_time_budget_minutes);
 			}
 		} catch {
 			clearStoredOnboardingToken();
@@ -155,7 +186,9 @@
 						min="15"
 						max="480"
 						step="1"
-						bind:value={profileDraft.daily_time_budget_minutes}
+						value={budgetInputValue}
+						on:input={handleBudgetInput}
+						on:change={commitBudgetInput}
 						aria-label="Daily task-time budget value"
 					/>
 				</div>
@@ -165,7 +198,8 @@
 					min="15"
 					max="480"
 					step="1"
-					bind:value={profileDraft.daily_time_budget_minutes}
+					value={profileDraft.daily_time_budget_minutes}
+					on:input={handleSliderInput}
 					aria-describedby="budget-summary budget-summary-hint"
 				/>
 				<div class="slider-ticks" aria-hidden="true">
