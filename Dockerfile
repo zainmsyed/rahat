@@ -29,7 +29,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/rahat-api ./cmd/serve
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r rahat && useradd -r -g rahat rahat
@@ -50,5 +50,8 @@ RUN mkdir -p /data && chown rahat:rahat /data
 USER rahat
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["sh", "-c", "curl -fsS http://localhost:8080/healthz > /dev/null || exit 1"]
 
 CMD ["/usr/local/bin/rahat-api"]

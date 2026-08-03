@@ -48,22 +48,41 @@ docker build --build-arg VITE_API_BASE_URL=https://api.example.com -t rahat .
 1. Build from the repo root using the multi-stage `Dockerfile`. It compiles the SvelteKit frontend and bakes the resulting static files into the Go runtime image.
 2. Mount persistent storage at `/data`.
 3. Set the environment variables above.
-4. Add scheduled commands in Coolify for:
-   - `bash scripts/run-daily-schedule.sh`
-   - `bash scripts/run-telegram-daily.sh`
-   - `bash scripts/run-telegram-window.sh`
-   - `bash scripts/run-calendar-sync.sh`
-   - `bash scripts/run-email-recap.sh`
-   - `bash scripts/run-backup.sh`
+4. Add scheduled commands in Coolify for (these run inside the container, so use the compiled binary):
+   - `rahat-api ops:run-job schedule-daily`
+   - `rahat-api ops:run-job telegram-daily`
+   - `rahat-api ops:run-job telegram-window`
+   - `rahat-api ops:run-job calendar-sync`
+   - `rahat-api ops:run-job email-recap`
+   - `rahat-api ops:run-job backup-daily`
 5. If Telegram webhook mode is configured, confirm the app serves `/webhooks/telegram` on the same domain in `TELEGRAM_WEBHOOK_URL`.
 
 ## Hetzner VM
 
 1. Copy the repo to the VM and keep `.env` outside shell history.
-2. Create a writable `/data` volume/directory.
-3. Run the server with the production env loaded.
-4. Install cron entries pointing at the scripts in `scripts/`.
-5. If `BACKUP_TARGET_URI` is an `s3://` path, install and configure the AWS CLI for the runtime user.
+2. Build the image from the repo root: `docker build -t rahat .`
+3. Create a writable `/data` volume/directory.
+4. Run the container with the production env loaded:
+   ```bash
+   docker run -d --name rahat \
+     -p 8080:8080 \
+     -v /data:/data \
+     -e TELEGRAM_BOT_TOKEN=... \
+     -e WEB_SESSION_SECRET=... \
+     -e WEB_ORIGIN=https://<your-domain> \
+     -e OTHER_SECRETS=... \
+     rahat
+   ```
+5. Install cron entries that run jobs inside the container:
+   ```bash
+   docker exec rahat rahat-api ops:run-job schedule-daily
+   docker exec rahat rahat-api ops:run-job telegram-daily
+   docker exec rahat rahat-api ops:run-job telegram-window
+   docker exec rahat rahat-api ops:run-job calendar-sync
+   docker exec rahat rahat-api ops:run-job email-recap
+   docker exec rahat rahat-api ops:run-job backup-daily
+   ```
+6. If `BACKUP_TARGET_URI` is an `s3://` path, install and configure the AWS CLI on the host (or in a sidecar) so backups can be uploaded.
 
 ## Telegram notes
 

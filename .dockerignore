@@ -7,6 +7,9 @@
 .env
 .env.local
 .env.*.local
+web/.env
+web/.env.local
+web/.env.*.local
 
 # Frontend build artifacts and dependencies
 node_modules/
