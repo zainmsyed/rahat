@@ -36,20 +36,20 @@ A linked Telegram user sends `/edit` and receives a clickable **Manage my routin
 ---
 
 ## Checklist
-- [ ] Reproduce the current `/edit` response with a linked test chat and identify why Telegram falls back from the inline button.
+- [x] Reproduce the current `/edit` response with a linked test chat and identify why Telegram falls back from the inline button.
 - [x] Ensure the generated management URL uses an explicit configured reachable IP address and port for local/LAN deployments, or the configured public host in production, and is valid for Telegram's URL button requirements.
 - [x] Keep the inline **Manage my routines** button as the primary response and retain a safe plain-text fallback only when button delivery fails.
 - [x] Add or update tests for configured host handling, clickable markup delivery, fallback behavior, and single-use access grants.
 - [x] Update deployment examples/runbook with the local/LAN IP-address-and-port or public-host requirement for clickable `/edit` links.
-- [ ] Manually verify `/edit` from a linked Telegram chat using a reachable host.
+- [x] Manually verify `/edit` from a linked Telegram chat using a reachable host.
 
 ---
 
 ## Issues
 
 - **Initial no-response report was caused by the service not running.** There was no `rahat` container, so Telegram long polling was inactive. The current container is now running with the real bot token, `TELEGRAM_LINK_HOST=192.168.86.232:8080`, and the existing local database; logs confirm `/edit` updates were received and inline link responses were issued.
-- **Login initially failed because the server origin did not match the LAN link host.** The link used `192.168.86.232:8080`, but `WEB_ORIGIN` was `http://localhost:8080`, causing the phone's LAN `Origin` to receive HTTP 403. The container was restarted with both `WEB_ORIGIN=http://192.168.86.232:8080` and `TELEGRAM_LINK_HOST=192.168.86.232:8080`; an access-link exchange then returned HTTP 200 for the existing user/database. User confirmation is still required that the Telegram button now opens and logs in from the phone.
-- **Live Telegram verification remains pending.** Automated tests and the documented host configuration cover the inline-button, fallback, and single-use behavior, but a real linked Telegram chat has not yet been used in this environment to confirm Telegram accepts the configured LAN IP URL and renders the button. User confirmation is required with `TELEGRAM_LINK_HOST=<reachable-ip:port>` and a phone on the same network.
+- **Login initially failed because the server origin did not match the LAN link host.** The link used `192.168.86.232:8080`, but `WEB_ORIGIN` was `http://localhost:8080`, causing the phone's LAN `Origin` to receive HTTP 403. The container was restarted with both `WEB_ORIGIN=http://192.168.86.232:8080` and `TELEGRAM_LINK_HOST=192.168.86.232:8080`; an access-link exchange then returned HTTP 200 for the existing user/database.
+- **Live Telegram verification completed.** The user confirmed that the link is correct and successfully opened the Manage routines screen from Telegram using the reachable LAN host. No Story 034 blockers remain.
 
 ---
 
@@ -57,4 +57,4 @@ A linked Telegram user sends `/edit` and receives a clickable **Manage my routin
 
 Implemented explicit reachable-host handling for Telegram `/edit` links. Local/loopback `WEB_ORIGIN` values now require `TELEGRAM_LINK_HOST` with a non-loopback IP address and port, such as `192.168.1.20:8080`; automatic interface selection and `localhost` links are no longer used. Public HTTP(S) origins continue to work without the override. The inline **Manage my routines** button remains the primary response, with the existing plain-text fallback retained only when Telegram rejects button delivery. Added tests covering LAN IP URLs, public origins, missing/invalid local hosts, inline markup, fallback delivery, access-grant exchange, and single-use behavior. Updated deployment documentation and `.env.example` with the phone-reachable IP/port requirement.
 
-The Telegram package tests and full Go test suite pass in the Go 1.25 Docker toolchain. A live Telegram chat verification is still required before closeout.
+The Telegram package tests and full Go test suite pass in the Go 1.25 Docker toolchain. A live linked Telegram chat was also verified: the `/edit` link used the configured reachable LAN host and opened the Manage routines screen successfully. The story is ready for Vazir closeout; it remains in-progress until that workflow runs.
