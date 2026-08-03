@@ -1,10 +1,10 @@
 # Story 033: Update Coolify deployment docs for single-container long-polling deployment
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** ops  
 **Created:** 2026-07-26  
 **Last accessed:** 2026-08-03  
-**Completed:** —
+**Completed:** 2026-08-03
 
 ---
 
