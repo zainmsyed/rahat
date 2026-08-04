@@ -14,6 +14,10 @@ func (s *Service) Create(ctx context.Context, occurrence Occurrence) (Occurrence
 	return s.repo.Create(ctx, occurrence)
 }
 
+func (s *Service) SaveOpen(ctx context.Context, occurrence Occurrence) (Occurrence, error) {
+	return s.repo.SaveOpen(ctx, occurrence)
+}
+
 func (s *Service) GetByID(ctx context.Context, id string) (Occurrence, error) {
 	return s.repo.GetByID(ctx, id)
 }

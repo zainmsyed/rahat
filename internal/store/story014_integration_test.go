@@ -35,6 +35,36 @@ func TestMigrationResolvesDuplicateTelegramChatIDs(t *testing.T) {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);
+		CREATE TABLE tasks (id TEXT PRIMARY KEY, user_id TEXT NOT NULL);
+		CREATE TABLE starter_task_templates (id TEXT PRIMARY KEY);
+		CREATE TABLE occurrences (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			task_id TEXT NOT NULL,
+			subtask_id TEXT,
+			status TEXT NOT NULL,
+			scheduled_for_date TEXT NOT NULL,
+			original_scheduled_for_date TEXT NOT NULL,
+			scheduled_time_of_day TEXT NOT NULL,
+			rollover_count INTEGER NOT NULL DEFAULT 0,
+			consecutive_no_count INTEGER NOT NULL DEFAULT 0,
+			snoozed_until_at TEXT,
+			ready_at TEXT,
+			completed_at TEXT,
+			skipped_at TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
+		CREATE TABLE event_logs (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			occurrence_id TEXT,
+			channel TEXT NOT NULL,
+			event_type TEXT NOT NULL,
+			message_type TEXT NOT NULL,
+			payload_json TEXT NOT NULL DEFAULT '{}',
+			occurred_at TEXT NOT NULL
+		);
 	`); err != nil {
 		t.Fatalf("create bootstrap tables: %v", err)
 	}

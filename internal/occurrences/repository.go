@@ -3,6 +3,7 @@ package occurrences
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,6 +38,24 @@ func (r *Repository) Create(ctx context.Context, occurrence Occurrence) (Occurre
 	}
 
 	return occurrence, nil
+}
+
+func (r *Repository) GetOpenByIdentity(ctx context.Context, identity OpenOccurrenceIdentity) (Occurrence, error) {
+	var id string
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT id
+		FROM occurrences
+		WHERE user_id = ?
+		  AND task_id = ?
+		  AND COALESCE(subtask_id, '') = ?
+		  AND original_scheduled_for_date = ?
+		  AND status IN (?, ?)
+		ORDER BY CASE WHEN status = ? THEN 0 ELSE 1 END, updated_at DESC, id
+		LIMIT 1
+	`, identity.UserID, identity.TaskID, identity.SubtaskID, identity.OriginalScheduledForDate, StatusPending, StatusScheduled, StatusScheduled).Scan(&id); err != nil {
+		return Occurrence{}, fmt.Errorf("get open occurrence identity: %w", err)
+	}
+	return r.GetByID(ctx, id)
 }
 
 func (r *Repository) GetByID(ctx context.Context, id string) (Occurrence, error) {
@@ -84,6 +103,32 @@ func (r *Repository) GetByID(ctx context.Context, id string) (Occurrence, error)
 	}
 
 	return occurrence, nil
+}
+
+func (r *Repository) SaveOpen(ctx context.Context, occurrence Occurrence) (Occurrence, error) {
+	existing, err := r.GetOpenByIdentity(ctx, occurrence.OpenIdentity())
+	if err == nil {
+		occurrence.ID = existing.ID
+		occurrence.CreatedAt = existing.CreatedAt
+		return r.Update(ctx, occurrence)
+	}
+	if !IsNotFound(err) {
+		return Occurrence{}, err
+	}
+	created, err := r.Create(ctx, occurrence)
+	if err == nil {
+		return created, nil
+	}
+
+	// A concurrent planner may have inserted the same logical occurrence after
+	// the lookup. Re-read the unique identity and update that row instead.
+	existing, lookupErr := r.GetOpenByIdentity(ctx, occurrence.OpenIdentity())
+	if lookupErr != nil {
+		return Occurrence{}, err
+	}
+	occurrence.ID = existing.ID
+	occurrence.CreatedAt = existing.CreatedAt
+	return r.Update(ctx, occurrence)
 }
 
 func (r *Repository) Update(ctx context.Context, occurrence Occurrence) (Occurrence, error) {
@@ -159,6 +204,10 @@ func (r *Repository) ListByTask(ctx context.Context, taskID string) ([]Occurrenc
 	}
 
 	return occurrences, rows.Err()
+}
+
+func IsNotFound(err error) bool {
+	return err != nil && errors.Is(err, sql.ErrNoRows)
 }
 
 func nullIfEmpty(value string) any {

@@ -69,7 +69,7 @@ func TestHandleCallbackFlow(t *testing.T) {
 		t.Fatalf("snoozed date = %s, want 2026-07-11", updated.ScheduledForDate)
 	}
 
-	occ2, _ := occSvc.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: task.Task.ID, Status: occurrences.StatusScheduled, ScheduledForDate: "2026-07-08", OriginalScheduledForDate: "2026-07-08", ScheduledTimeOfDay: tasks.TimeOfDayMorning})
+	occ2, _ := occSvc.Create(ctx, occurrences.Occurrence{UserID: user.ID, TaskID: task.Task.ID, Status: occurrences.StatusScheduled, ScheduledForDate: "2026-07-11", OriginalScheduledForDate: "2026-07-11", ScheduledTimeOfDay: tasks.TimeOfDayMorning})
 	if err := svc.HandleCallback(ctx, ntg.DoneAction(user.ID, occ2.ID)); err != nil {
 		t.Fatal(err)
 	}

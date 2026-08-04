@@ -257,6 +257,129 @@ func TestPlanDayScenarios(t *testing.T) {
 	}
 }
 
+func TestPlanDayIsIdempotentAndPreservesTerminalHistory(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+	userService := users.NewService(users.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+	occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	blockRepo := store.NewCalendarBlockRepository(sqlDB)
+	svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+	user, err := userService.Create(ctx, users.User{DisplayName: "Idempotent planner", Timezone: "UTC", DailyTimeBudgetMinutes: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{
+		UserID: user.ID, Name: "Daily task", DurationMinutes: 5,
+		CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1,
+		Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := occurrenceService.Create(ctx, occurrences.Occurrence{
+		UserID: user.ID, TaskID: task.Task.ID, Status: occurrences.StatusCompleted,
+		ScheduledForDate: "2026-07-12", OriginalScheduledForDate: "2026-07-12",
+		ScheduledTimeOfDay: tasks.TimeOfDayMorning,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	day := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
+	first, err := svc.PlanDay(ctx, user.ID, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.PlanDay(ctx, user.ID, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Scheduled) != 1 || len(second.Scheduled) != 1 || first.Scheduled[0].ID != second.Scheduled[0].ID {
+		t.Fatalf("rerun created or returned different occurrence: first=%+v second=%+v", first.Scheduled, second.Scheduled)
+	}
+
+	later, err := svc.PlanDay(ctx, user.ID, day.AddDate(0, 0, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(later.Scheduled) != 1 || later.Scheduled[0].ID != first.Scheduled[0].ID {
+		t.Fatalf("later day did not reuse the open occurrence: %+v", later.Scheduled)
+	}
+
+	all, err := occurrenceService.ListByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("occurrence count = %d, want 2 including one completed historical record", len(all))
+	}
+	var completed int
+	for _, occurrence := range all {
+		if occurrence.Status == occurrences.StatusCompleted {
+			completed++
+		}
+	}
+	if completed != 1 {
+		t.Fatalf("completed history count = %d, want 1", completed)
+	}
+}
+
+func TestPlanDayOverflowIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	if err := store.ApplyMigrations(ctx, sqlDB); err != nil {
+		t.Fatalf("ApplyMigrations() error = %v", err)
+	}
+	userService := users.NewService(users.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+	occurrenceService := occurrences.NewService(occurrences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	blockRepo := store.NewCalendarBlockRepository(sqlDB)
+	svc := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, blockRepo)
+
+	user, err := userService.Create(ctx, users.User{DisplayName: "Overflow planner", Timezone: "UTC", DailyTimeBudgetMinutes: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"First task", "Overflow task"} {
+		if _, err := taskService.CreateTaskWithSubtasks(ctx, tasks.Task{
+			UserID: user.ID, Name: name, DurationMinutes: 5,
+			CadenceType: tasks.CadenceTypeInterval, CadenceValue: 1,
+			Priority: tasks.PriorityMedium, TimeOfDayPreference: tasks.TimeOfDayMorning,
+		}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	day := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
+	first, err := svc.PlanDay(ctx, user.ID, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.PlanDay(ctx, user.ID, day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Scheduled) != 1 || len(first.Overflowed) != 1 || len(second.Scheduled) != 1 || len(second.Overflowed) != 1 {
+		t.Fatalf("unexpected plan results: first=%+v second=%+v", first, second)
+	}
+	if first.Scheduled[0].ID != second.Scheduled[0].ID || first.Overflowed[0].ID != second.Overflowed[0].ID {
+		t.Fatalf("rerun did not reuse scheduled/overflow occurrences: first=%+v second=%+v", first, second)
+	}
+	all, err := occurrenceService.ListByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("occurrence count = %d, want 2 after overflow rerun", len(all))
+	}
+}
+
 func TestDayPreferenceFiltersWeekendAndKeepsOverflowOnAllowedDay(t *testing.T) {
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
@@ -1077,8 +1200,8 @@ func TestSchedulerCalendarAwareDaySelection(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		seed           func(context.Context, *testing.T, *users.Service, *tasks.Service, *occurrences.Service, *store.CalendarBlockRepository) (string, string)
+		name    string
+		seed    func(context.Context, *testing.T, *users.Service, *tasks.Service, *occurrences.Service, *store.CalendarBlockRepository) (string, string)
 		start   time.Time
 		wantDay string
 	}{

@@ -300,7 +300,7 @@ func (s *Service) buildCandidates(ctx context.Context, taskDefs []tasks.TaskWith
 	var candidates []scheduledCandidate
 	for _, open := range append(backlog, current...) {
 		taskDef, subtaskDef, ok := findDefinition(taskDefs, open.TaskID, open.SubtaskID)
-		if !ok || !dayPreferenceAllows(taskDef.Task, planDate) {
+		if !ok || !dayPreferenceAllows(taskDef, planDate) {
 			continue
 		}
 		window := effectiveWindow(taskDef, subtaskDef)
@@ -1191,10 +1191,7 @@ func copyTimeMapInto(target, source map[string]time.Time) {
 }
 
 func persistOccurrence(ctx context.Context, service *occurrences.Service, occurrence occurrences.Occurrence) (occurrences.Occurrence, error) {
-	if occurrence.ID == "" {
-		return service.Create(ctx, occurrence)
-	}
-	return service.Update(ctx, occurrence)
+	return service.SaveOpen(ctx, occurrence)
 }
 
 func nextCheckpoint(day time.Time, scheduled []occurrences.Occurrence) *time.Time {

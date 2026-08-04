@@ -15,6 +15,13 @@ const (
 	StatusSkipped   Status = "skipped"
 )
 
+type OpenOccurrenceIdentity struct {
+	UserID                   string
+	TaskID                   string
+	SubtaskID                string
+	OriginalScheduledForDate string
+}
+
 type Occurrence struct {
 	ID                       string
 	UserID                   string
@@ -32,4 +39,13 @@ type Occurrence struct {
 	SkippedAt                *time.Time
 	CreatedAt                time.Time
 	UpdatedAt                time.Time
+}
+
+func (o Occurrence) OpenIdentity() OpenOccurrenceIdentity {
+	return OpenOccurrenceIdentity{
+		UserID:                   o.UserID,
+		TaskID:                   o.TaskID,
+		SubtaskID:                o.SubtaskID,
+		OriginalScheduledForDate: o.OriginalScheduledForDate,
+	}
 }

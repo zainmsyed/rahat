@@ -1,10 +1,10 @@
 # Story 038: Make daily planning idempotent
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** hardening  
 **Created:** 2026-08-03  
 **Last accessed:** 2026-08-04  
-**Completed:** not yet  
+**Completed:** 2026-08-04
 
 ---
 
