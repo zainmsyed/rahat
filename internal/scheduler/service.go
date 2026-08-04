@@ -161,7 +161,7 @@ func (s *Service) PreviewDay(ctx context.Context, userID string, day time.Time) 
 	if err != nil {
 		return PlanResult{}, err
 	}
-	result, _, err := s.previewDayWithOccurrences(ctx, user, taskDefs, allOccurrences, day)
+	result, _, err := s.previewDayWithOccurrences(ctx, user, taskDefs, allOccurrences, map[string]bool{}, day)
 	return result, err
 }
 
@@ -175,13 +175,17 @@ func (s *Service) PreviewRange(ctx context.Context, userID string, startDay time
 	}
 	results := make([]PlanResult, 0, days)
 	state := cloneOccurrences(allOccurrences)
+	previewCommitted := map[string]bool{}
 	for i := 0; i < days; i++ {
-		result, nextState, err := s.previewDayWithOccurrences(ctx, user, taskDefs, state, startDay.Add(time.Duration(i)*24*time.Hour))
+		result, nextState, err := s.previewDayWithOccurrences(ctx, user, taskDefs, state, previewCommitted, startDay.AddDate(0, 0, i))
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, result)
 		state = nextState
+		for _, occurrence := range result.Scheduled {
+			previewCommitted[occurrenceKey(occurrence.TaskID, occurrence.SubtaskID, occurrence.OriginalScheduledForDate)] = true
+		}
 	}
 	return results, nil
 }
@@ -202,13 +206,20 @@ func (s *Service) loadPreviewInputs(ctx context.Context, userID string) (users.U
 	return user, tasksWithSubtasks, allOccurrences, nil
 }
 
-func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User, taskDefs []tasks.TaskWithSubtasks, allOccurrences []occurrences.Occurrence, day time.Time) (PlanResult, []occurrences.Occurrence, error) {
+func (s *Service) previewDayWithOccurrences(ctx context.Context, user users.User, taskDefs []tasks.TaskWithSubtasks, allOccurrences []occurrences.Occurrence, previewCommitted map[string]bool, day time.Time) (PlanResult, []occurrences.Occurrence, error) {
 	planDate, err := localDayInTimezone(day, user.Timezone)
 	if err != nil {
 		return PlanResult{}, nil, fmt.Errorf("resolve plan date: %w", err)
 	}
 	planDateStr := store.FormatDate(planDate)
 	backlog, current, history := splitOccurrences(allOccurrences, planDateStr)
+	// In a read-only range preview, planned open occurrences from earlier days
+	// are already commitments. Count them as cadence units for later preview
+	// days without changing PlanDay's persisted-production semantics.
+	history = append(history, backlog...)
+	history = append(history, current...)
+	backlog = filterPreviewCommitted(backlog, previewCommitted)
+	current = filterPreviewCommitted(current, previewCommitted)
 
 	horizonEnd := planDate.AddDate(0, 0, 6)
 	constraintsByDate, err := s.loadCalendarConstraintsForRange(ctx, user.ID, planDate, horizonEnd)
@@ -420,6 +431,16 @@ func applyPreviewResults(existing, scheduled, overflowed, skipped []occurrences.
 		state = upsertPreviewOccurrence(state, occurrence)
 	}
 	return state
+}
+
+func filterPreviewCommitted(items []occurrences.Occurrence, committed map[string]bool) []occurrences.Occurrence {
+	filtered := make([]occurrences.Occurrence, 0, len(items))
+	for _, occurrence := range items {
+		if !committed[occurrenceKey(occurrence.TaskID, occurrence.SubtaskID, occurrence.OriginalScheduledForDate)] {
+			filtered = append(filtered, occurrence)
+		}
+	}
+	return filtered
 }
 
 func upsertPreviewOccurrence(state []occurrences.Occurrence, updated occurrences.Occurrence) []occurrences.Occurrence {

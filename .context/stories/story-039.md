@@ -1,10 +1,10 @@
 # Story 039: Add a read-only weekly schedule preview
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** feature/hardening  
 **Created:** 2026-08-03  
 **Last accessed:** 2026-08-04  
-**Completed:** not yet  
+**Completed:** 2026-08-04
 
 ---
 

@@ -14,6 +14,7 @@ vi.mock('$lib/api/lookahead', () => ({
 
 const planFixture = {
 	user: { display_name: 'Zain', timezone: 'America/Chicago' },
+	range_days: 2,
 	days: [
 		{
 			date: '2026-07-26',
@@ -31,6 +32,9 @@ const planFixture = {
 					reason: 'Calendar blocked the afternoon window: Dentist (medium)'
 				}
 			],
+			overflowed: [],
+			skipped: [],
+			reasons: {},
 			small_task_only_reason: '',
 			window_budgets_minutes: { morning: 30, afternoon: 0, evening: 15 }
 		},
@@ -40,6 +44,9 @@ const planFixture = {
 			windows: { morning: [], afternoon: [], evening: [] },
 			blocked_windows: { morning: [], afternoon: [], evening: [] },
 			omitted_items: [],
+			overflowed: [],
+			skipped: [],
+			reasons: {},
 			small_task_only_reason: '',
 			window_budgets_minutes: { morning: 60, afternoon: 60, evening: 60 }
 		}

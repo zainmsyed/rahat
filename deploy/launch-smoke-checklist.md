@@ -42,6 +42,7 @@ Run these checks before letting testers rely on the environment. These commands 
 ## Read-only view
 - Generate a lookahead token in a controlled non-production environment when the issuer helper is enabled.
 - Open `/lookahead?token=...` and confirm today/tomorrow, blocked-window explanations, and omitted-item reasons render.
+- In a controlled non-production environment, request `/lookahead/plan?token=...&days=7` and confirm seven days are returned, recurring tasks stay within their cadence/day preferences, and repeated requests do not change occurrence or checkpoint counts.
 
 ## Backups
 - Run `docker exec rahat rahat-api ops:run-job backup-daily` when `BACKUP_TARGET_URI` is configured.

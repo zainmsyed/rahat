@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rahat/rahat/internal/occurrences"
 	"github.com/rahat/rahat/internal/scheduler"
+	"github.com/rahat/rahat/internal/store"
 	"github.com/rahat/rahat/internal/tasks"
 	"github.com/rahat/rahat/internal/tokens"
 	"github.com/rahat/rahat/internal/users"
@@ -26,8 +28,9 @@ type lookaheadHandler struct {
 }
 
 type lookaheadResponse struct {
-	User lookaheadUser  `json:"user"`
-	Days []lookaheadDay `json:"days"`
+	User      lookaheadUser  `json:"user"`
+	RangeDays int            `json:"range_days"`
+	Days      []lookaheadDay `json:"days"`
 }
 
 type lookaheadUser struct {
@@ -41,6 +44,9 @@ type lookaheadDay struct {
 	Windows             map[string][]lookaheadItem `json:"windows"`
 	BlockedWindows      map[string][]string        `json:"blocked_windows"`
 	OmittedItems        []lookaheadOmittedItem     `json:"omitted_items"`
+	Overflowed          []lookaheadItem            `json:"overflowed"`
+	Skipped             []lookaheadItem            `json:"skipped"`
+	Reasons             map[string]string          `json:"reasons"`
 	SmallTaskOnlyReason string                     `json:"small_task_only_reason,omitempty"`
 	WindowBudgets       map[string]int             `json:"window_budgets_minutes"`
 }
@@ -119,20 +125,25 @@ func (h *lookaheadHandler) handlePlan(w http.ResponseWriter, r *http.Request) {
 		now = h.clock().UTC()
 	}
 	today := localDateAsUTC(user.Timezone, now)
-	plans, err := h.scheduler.PreviewRange(r.Context(), user.ID, today, 2)
+	rangeDays := 2
+	if rawDays := strings.TrimSpace(r.URL.Query().Get("days")); rawDays != "" {
+		parsedDays, parseErr := strconv.Atoi(rawDays)
+		if parseErr != nil || parsedDays < 1 || parsedDays > 7 {
+			http.Error(w, "days must be between 1 and 7", http.StatusBadRequest)
+			return
+		}
+		rangeDays = parsedDays
+	}
+	plans, err := h.scheduler.PreviewRange(r.Context(), user.ID, today, rangeDays)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	days := make([]lookaheadDay, 0, len(plans))
 	for idx, plan := range plans {
-		label := "Today"
-		if idx == 1 {
-			label = "Tomorrow"
-		}
-		days = append(days, buildLookaheadDay(label, plan, lookup))
+		days = append(days, buildLookaheadDay(lookaheadLabel(idx, plan.Date), plan, lookup))
 	}
-	writeJSON(w, http.StatusOK, lookaheadResponse{User: lookaheadUser{DisplayName: user.DisplayName, Timezone: user.Timezone}, Days: days})
+	writeJSON(w, http.StatusOK, lookaheadResponse{User: lookaheadUser{DisplayName: user.DisplayName, Timezone: user.Timezone}, RangeDays: rangeDays, Days: days})
 }
 
 func writeTokenError(w http.ResponseWriter, err error) {
@@ -162,27 +173,49 @@ func buildTaskLookup(taskDefs []tasks.TaskWithSubtasks) map[string]taskLookup {
 func buildLookaheadDay(label string, plan scheduler.PlanResult, lookup map[string]taskLookup) lookaheadDay {
 	windows := map[string][]lookaheadItem{"morning": {}, "afternoon": {}, "evening": {}}
 	for _, occurrence := range plan.Scheduled {
-		item := lookaheadItem{Name: occurrenceName(occurrence, lookup), Window: string(occurrence.ScheduledTimeOfDay), DurationMinutes: occurrenceDuration(occurrence, lookup)}
-		if item.Window == "" {
-			item.Window = "morning"
-		}
-		if occurrence.ReadyAt != nil {
-			item.ReadyAt = occurrence.ReadyAt.Format(time.RFC3339)
-		}
-		if _, ok := windows[item.Window]; !ok {
-			windows[item.Window] = []lookaheadItem{}
-		}
+		item := lookaheadItemFromOccurrence(occurrence, lookup)
 		windows[item.Window] = append(windows[item.Window], item)
+	}
+	overflowed := make([]lookaheadItem, 0, len(plan.Overflowed))
+	for _, occurrence := range plan.Overflowed {
+		overflowed = append(overflowed, lookaheadItemFromOccurrence(occurrence, lookup))
+	}
+	skipped := make([]lookaheadItem, 0, len(plan.Skipped))
+	for _, occurrence := range plan.Skipped {
+		skipped = append(skipped, lookaheadItemFromOccurrence(occurrence, lookup))
 	}
 	omitted := make([]lookaheadOmittedItem, 0, len(plan.Overflowed)+len(plan.Skipped))
 	for _, occurrence := range append(plan.Overflowed, plan.Skipped...) {
-		window := string(occurrence.ScheduledTimeOfDay)
-		if window == "" {
-			window = "morning"
-		}
-		omitted = append(omitted, lookaheadOmittedItem{Name: occurrenceName(occurrence, lookup), Window: window, Reason: omissionReason(window, plan)})
+		item := lookaheadItemFromOccurrence(occurrence, lookup)
+		omitted = append(omitted, lookaheadOmittedItem{Name: item.Name, Window: item.Window, Reason: omissionReason(item.Window, plan)})
 	}
-	return lookaheadDay{Date: plan.Date, Label: label, Windows: windows, BlockedWindows: normalizeBlockedWindows(plan.BlockedWindows), OmittedItems: omitted, SmallTaskOnlyReason: plan.SmallTaskOnlyReason, WindowBudgets: plan.WindowBudgetsMinutes}
+	return lookaheadDay{Date: plan.Date, Label: label, Windows: windows, BlockedWindows: normalizeBlockedWindows(plan.BlockedWindows), OmittedItems: omitted, Overflowed: overflowed, Skipped: skipped, Reasons: plan.Reasons, SmallTaskOnlyReason: plan.SmallTaskOnlyReason, WindowBudgets: plan.WindowBudgetsMinutes}
+}
+
+func lookaheadItemFromOccurrence(occurrence occurrences.Occurrence, lookup map[string]taskLookup) lookaheadItem {
+	item := lookaheadItem{Name: occurrenceName(occurrence, lookup), Window: string(occurrence.ScheduledTimeOfDay), DurationMinutes: occurrenceDuration(occurrence, lookup)}
+	if item.Window == "" {
+		item.Window = "morning"
+	}
+	if occurrence.ReadyAt != nil {
+		item.ReadyAt = occurrence.ReadyAt.Format(time.RFC3339)
+	}
+	return item
+}
+
+func lookaheadLabel(index int, date string) string {
+	switch index {
+	case 0:
+		return "Today"
+	case 1:
+		return "Tomorrow"
+	default:
+		parsed, err := time.Parse(store.DateLayout, date)
+		if err != nil {
+			return date
+		}
+		return parsed.Weekday().String()
+	}
 }
 
 func normalizeBlockedWindows(blocked map[string][]string) map[string][]string {
@@ -220,11 +253,11 @@ func occurrenceDuration(occurrence occurrences.Occurrence, lookup map[string]tas
 }
 
 func omissionReason(window string, plan scheduler.PlanResult) string {
-	if plan.SmallTaskOnlyReason != "" {
-		return plan.SmallTaskOnlyReason
-	}
 	if reasons := plan.BlockedWindows[window]; len(reasons) > 0 {
 		return fmt.Sprintf("Calendar blocked the %s window: %s", window, strings.Join(reasons, ", "))
+	}
+	if plan.SmallTaskOnlyReason != "" {
+		return plan.SmallTaskOnlyReason
 	}
 	return "Not enough open time in this window; Rahat will try again later."
 }

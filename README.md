@@ -38,6 +38,8 @@ Key variables:
 - `TELEGRAM_API_BASE_URL`: optional custom Telegram API base URL
 - `LOOKAHEAD_TOKEN_SECRET`: required in production for signed read-only lookahead links
 - `LOOKAHEAD_TOKEN_ISSUER_ENABLED`: explicit opt-in for the non-production lookahead token helper
+
+The token-scoped read-only lookahead endpoint returns today and tomorrow by default. For a state-carrying weekly preview, request `/lookahead/plan?token=<token>&days=7`; it returns seven day records with scheduled windows, overflowed/skipped items, reasons, blocked windows, and per-window budgets without persisting occurrences or schedule checkpoints.
 - `WEB_SESSION_SECRET`: required in production for hashing beta access grants and durable web sessions
 - `EMAIL_RECAP_OUTBOX_DIR`: file outbox path used by the recap job
 - `BACKUP_TARGET_URI`: backup destination, either a local path / `file://` path or an `s3://` URI

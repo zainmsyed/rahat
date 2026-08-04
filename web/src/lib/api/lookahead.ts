@@ -21,6 +21,9 @@ export type LookaheadDay = {
 	windows: Record<TimeWindow, LookaheadItem[]>;
 	blocked_windows: Record<TimeWindow, string[]>;
 	omitted_items: LookaheadOmittedItem[];
+	overflowed: LookaheadItem[];
+	skipped: LookaheadItem[];
+	reasons: Record<string, string>;
 	small_task_only_reason?: string;
 	window_budgets_minutes: Record<TimeWindow, number>;
 };
@@ -30,13 +33,14 @@ export type LookaheadResponse = {
 		display_name: string;
 		timezone: string;
 	};
+	range_days: number;
 	days: LookaheadDay[];
 };
 
 export const windows: TimeWindow[] = ['morning', 'afternoon', 'evening'];
 
-export async function getLookaheadPlan(token: string) {
-	const response = await fetch(`${apiBaseUrl}/lookahead/plan?token=${encodeURIComponent(token)}`);
+export async function getLookaheadPlan(token: string, days = 2) {
+	const response = await fetch(`${apiBaseUrl}/lookahead/plan?token=${encodeURIComponent(token)}&days=${days}`);
 	if (!response.ok) {
 		throw new Error(await response.text());
 	}

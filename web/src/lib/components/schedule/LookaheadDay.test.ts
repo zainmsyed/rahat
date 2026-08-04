@@ -18,6 +18,9 @@ const day: LookaheadDayData = {
 		evening: []
 	},
 	omitted_items: [{ name: 'Deep clean', window: 'afternoon', reason: 'Calendar blocked the afternoon window: Dentist (medium)' }],
+	overflowed: [],
+	skipped: [],
+	reasons: {},
 	small_task_only_reason: '',
 	window_budgets_minutes: { morning: 30, afternoon: 0, evening: 15 }
 };
