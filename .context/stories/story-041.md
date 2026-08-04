@@ -1,10 +1,10 @@
 # Story 041: Align migration tests with production bootstrap
 
-**Status:** in-progress  
+**Status:** complete  
 **Type:** test-hardening  
 **Created:** 2026-08-03  
 **Last accessed:** 2026-08-04  
-**Completed:** not yet  
+**Completed:** 2026-08-04
 
 ---
 

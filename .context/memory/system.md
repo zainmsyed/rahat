@@ -70,7 +70,7 @@
 - When an application generates browser links for an external device, configure the generated link origin and the server's trusted-origin/CORS policy to use the same reachable host and port. <!-- source: story-034 --> <!-- confidence: low — no signal in last 5 stories -->
 - Before debugging an event-driven integration's response, verify that its runtime worker or transport is running and receiving events. <!-- source: story-034 --> <!-- confidence: low — no signal in last 5 stories -->
 - When multiple UI controls share a constrained numeric value, normalize or reject invalid user input before committing shared state, and test boundary, empty, and non-step values. <!-- source: story-035 --> <!-- confidence: low — no signal in last 5 stories -->
-- When a state-changing UI action returns a user-facing result, render that result before redirecting or require an explicit user action to continue. <!-- source: story-036 --> <!-- confidence: high -->
+- When a state-changing UI action returns a user-facing result, render that result before redirecting or require an explicit user action to continue. <!-- source: story-036 --> <!-- confidence: low — no signal in last 5 stories -->
 - Temporary visual-verification routes must be explicitly recorded as approved scope exceptions and removed or excluded from the permanent feature surface before closeout. <!-- source: story-037 --> <!-- confidence: high -->
 - New reusable UI components must use declared design-system spacing and shared visual tokens instead of ad hoc pixel and color values. <!-- source: story-037 --> <!-- confidence: high -->
 - Idempotent persistence for logical occurrences must use an explicit stable identity, a database uniqueness guard, and an explicitly named upsert path while excluding terminal history. <!-- source: story-038 --> <!-- confidence: high -->
@@ -79,6 +79,8 @@
 - Test boundary values (minimum, maximum, and just-out-of-range) for every numeric query parameter accepted by an endpoint. <!-- source: story-039 --> <!-- confidence: high -->
 - When an external service rejects concurrent consumers (e.g., Telegram getUpdates), ensure exactly one process owns the update transport; CLI/operator jobs must reuse sender-only clients and never start a second polling or webhook loop. <!-- source: story-040 --> <!-- confidence: high -->
 - CLI/operator command entry points should construct only the services required for the invoked command instead of the full server service graph. <!-- source: story-040 --> <!-- confidence: high -->
+- Migration integration tests must build the schema by applying the ordered migration/bootstrap path, not by marking migrations applied while fabricating only selected tables. <!-- source: story-041 --> <!-- confidence: high -->
+- Do not add files outside a story's declared scope without explicit approval or an updated scope record. <!-- source: story-041 --> <!-- confidence: high -->
 ### From successes
 - When a scheduler splits a daily time budget across windows, it should allocate demand exactly when total candidate demand fits the daily budget rather than enforcing an artificial proportional split that can reject feasible combinations. <!-- source: story-016 --> <!-- confidence: low — no signal in last 5 stories -->
 - When falling back from a preferred time window, prefer the nearest window before jumping to a distant one. <!-- source: story-016 --> <!-- confidence: low — no signal in last 5 stories -->
