@@ -56,10 +56,9 @@ The full Go test suite passes after new migrations are added. In particular, the
 ## Completion Summary
 
 - Added `ApplyMigrationsUpTo` to `internal/store/migrations.go` so tests can stop the migration chain at a specific migration and recreate historical schema states.
-- Introduced shared test helpers in `internal/store/testhelpers_test.go` (`openCleanTestDB`, `openTestDB`, `openTestDBAtMigration`) that mirror the production SQLite bootstrap path (WAL, foreign keys, `schema_migrations` table, then `ApplyMigrations`).
-- Rewrote `internal/store/story014_integration_test.go` to apply migrations 001–010 for real, seed two users with the same Telegram chat ID, and then apply the remaining migrations, preserving the duplicate-conflict assertions.
-- Simplified `internal/store/onboarding_confirmation_test.go` to use the shared `openTestDB` helper, removing its hand-rolled fixture.
-- Added `internal/store/migrations_test.go` with:
+- Consolidated shared test helpers and migration-chain tests into the allowed `internal/store/story014_integration_test.go` file. The helpers mirror the production SQLite bootstrap path (WAL, foreign keys, `schema_migrations` table, then `ApplyMigrations`).
+- Rewrote `internal/store/story014_integration_test.go` to apply migrations 001–010 for real, seed two users with the same Telegram chat ID, and then apply the remaining migrations, preserving the duplicate-conflict assertions. It also contains:
   - `TestMigrationsApplyInOrderOnCleanDatabase` — applies each migration in its own fresh database and verifies it is recorded.
   - `TestMigrationsAreIdempotent` — applies the full chain twice and confirms all migrations remain recorded.
+- Simplified `internal/store/onboarding_confirmation_test.go` to use the shared `openTestDB` helper, removing its hand-rolled fixture.
 - Ran `gofmt`, `go vet ./internal/store/...`, and the full `go test ./...` suite inside the `golang:1.25` container. All packages pass.
