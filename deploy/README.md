@@ -100,6 +100,7 @@ Optional variables:
 - Long polling is the default for this single-container deployment and does not require a public Telegram webhook URL.
 - Telegram webhooks remain optional and off by default. Use webhook mode only when `TELEGRAM_WEBHOOK_URL` is a real HTTPS domain path ending in `/webhooks/telegram`, with a matching `TELEGRAM_WEBHOOK_SECRET`.
 - With long polling enabled, confirm the startup log reports `"transport":"long_polling"` and that the bot receives a test `/start` or `/edit` message.
+- There must be only one Telegram update consumer at a time. The server process owns the single long-polling loop; operator jobs (`ops:run-job telegram-daily`, `telegram-window`, `ops:report-events`, etc.) run as short-lived processes that reuse the bot service to send messages but do not start their own polling or webhook transport.
 
 ## Google notes
 

@@ -90,6 +90,24 @@ func main() {
 	googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
 	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
 
+	// Operator commands share the same service layer but must not configure the
+	// Telegram update transport (long polling or webhook), because Telegram
+	// rejects concurrent getUpdates consumers with 409 errors. Handle these
+	// commands before any long-running transport is started.
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "ops:") {
+		opsTelegram := buildTelegramServiceForOps(
+			os.Getenv("TELEGRAM_BOT_TOKEN"),
+			os.Getenv("TELEGRAM_API_BASE_URL"),
+			userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo,
+		)
+		ops := newOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath, userService, taskService, prefService, schedulerService, opsTelegram, calendarService, eventService, lookaheadTokens)
+		if err := runOpsCommand(ctx, ops, authRoutes, os.Args); err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
+		return
+	}
+
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	webhookSecret := os.Getenv("TELEGRAM_WEBHOOK_SECRET")
 	webhookURL := os.Getenv("TELEGRAM_WEBHOOK_URL")
@@ -166,81 +184,6 @@ func main() {
 		})
 	} else {
 		logger.Warn("telegram bot disabled: TELEGRAM_BOT_TOKEN not set")
-	}
-
-	ops := newOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath, userService, taskService, prefService, schedulerService, telegramService, calendarService, eventService, lookaheadTokens)
-	opsAuth := authRoutes
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "ops:run-job":
-			if len(os.Args) < 3 {
-				logger.Error("missing job name", "available_jobs", ops.jobs.Names())
-				os.Exit(1)
-			}
-			if err := ops.jobs.Run(ctx, os.Args[2]); err != nil {
-				logger.Error("job failed", "job", os.Args[2], "error", err)
-				os.Exit(1)
-			}
-			logger.Info("job complete", "job", os.Args[2])
-			return
-		case "ops:report-events":
-			filter, err := parseReportFilter()
-			if err != nil {
-				logger.Error("invalid report filter", "error", err)
-				os.Exit(1)
-			}
-			format := strings.ToLower(strings.TrimSpace(os.Getenv("REPORT_FORMAT")))
-			if format == "csv" {
-				if err := ops.exportEventsCSV(ctx, filter, os.Stdout); err != nil {
-					logger.Error("event export failed", "error", err)
-					os.Exit(1)
-				}
-				return
-			}
-			if err := ops.reportEventSummary(ctx, filter, os.Stdout); err != nil {
-				logger.Error("event summary failed", "error", err)
-				os.Exit(1)
-			}
-			return
-		case "ops:backup":
-			if err := ops.runBackup(ctx); err != nil {
-				logger.Error("backup failed", "error", err)
-				os.Exit(1)
-			}
-			logger.Info("backup complete", "target", ops.backupTarget)
-			return
-		case "ops:seed-testers":
-			if err := ops.seedTesters(ctx); err != nil {
-				logger.Error("seed testers failed", "error", err)
-				os.Exit(1)
-			}
-			logger.Info("seed testers complete")
-			return
-		case "ops:issue-access-link":
-			if len(os.Args) < 3 {
-				logger.Error("missing user id or email")
-				os.Exit(1)
-			}
-			result, err := opsAuth.issueAccessLink(ctx, os.Args[2], time.Hour)
-			if err != nil {
-				logger.Error("issue access link failed", "error", err)
-				os.Exit(1)
-			}
-			payload, err := writeIssueLinkJSON(result)
-			if err != nil {
-				logger.Error("encode issue access link result failed", "error", err)
-				os.Exit(1)
-			}
-			_, _ = os.Stdout.Write(append(payload, '\n'))
-			return
-		case "ops:reset-nonprod":
-			if err := ops.resetNonProduction(ctx, os.Getenv("RAHAT_RESET_CONFIRM")); err != nil {
-				logger.Error("reset failed", "error", err)
-				os.Exit(1)
-			}
-			logger.Info("non-production reset complete", "database_path", cfg.DatabasePath)
-			return
-		}
 	}
 
 	mux.HandleFunc("GET /calendar/google/auth-url", requireAuthenticatedUserForRoute(authRoutes, func(w http.ResponseWriter, r *http.Request, current authenticatedUser) {
@@ -434,4 +377,83 @@ func parseDay(value string) time.Time {
 		return time.Now().UTC()
 	}
 	return parsed.UTC()
+}
+
+// buildTelegramServiceForOps creates a Telegram service suitable for operator
+// jobs. It does not configure or start any update transport; that is reserved
+// for the long-running server path so concurrent getUpdates consumers do not
+// conflict with each other.
+func buildTelegramServiceForOps(botToken, botBaseURL string, userService *usr.Service, taskService *taskpkg.Service, occurrenceService *occ.Service, eventService *events.Service, onboardingConfirmationRepo *store.OnboardingConfirmationRepository) *ntg.Service {
+	if botToken == "" {
+		return nil
+	}
+	bot := ntg.NewHTTPBotClient(botToken, botBaseURL)
+	return ntg.NewService(bot, userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo)
+}
+
+// runOpsCommand dispatches CLI operator commands. It must not start any
+// long-running Telegram transport; the passed-in ops runtime is built with a
+// Telegram service that can send messages but does not consume updates.
+func runOpsCommand(ctx context.Context, ops *opsRuntime, authRoutes *authHandler, args []string) error {
+	switch args[1] {
+	case "ops:run-job":
+		if len(args) < 3 {
+			return fmt.Errorf("missing job name; available jobs: %s", strings.Join(ops.jobs.Names(), ", "))
+		}
+		if err := ops.jobs.Run(ctx, args[2]); err != nil {
+			return fmt.Errorf("job %s failed: %w", args[2], err)
+		}
+		ops.logger.Info("job complete", "job", args[2])
+		return nil
+	case "ops:report-events":
+		filter, err := parseReportFilter()
+		if err != nil {
+			return fmt.Errorf("invalid report filter: %w", err)
+		}
+		format := strings.ToLower(strings.TrimSpace(os.Getenv("REPORT_FORMAT")))
+		if format == "csv" {
+			if err := ops.exportEventsCSV(ctx, filter, os.Stdout); err != nil {
+				return fmt.Errorf("event export failed: %w", err)
+			}
+			return nil
+		}
+		if err := ops.reportEventSummary(ctx, filter, os.Stdout); err != nil {
+			return fmt.Errorf("event summary failed: %w", err)
+		}
+		return nil
+	case "ops:backup":
+		if err := ops.runBackup(ctx); err != nil {
+			return fmt.Errorf("backup failed: %w", err)
+		}
+		ops.logger.Info("backup complete", "target", ops.backupTarget)
+		return nil
+	case "ops:seed-testers":
+		if err := ops.seedTesters(ctx); err != nil {
+			return fmt.Errorf("seed testers failed: %w", err)
+		}
+		ops.logger.Info("seed testers complete")
+		return nil
+	case "ops:issue-access-link":
+		if len(args) < 3 {
+			return fmt.Errorf("missing user id or email")
+		}
+		result, err := authRoutes.issueAccessLink(ctx, args[2], time.Hour)
+		if err != nil {
+			return fmt.Errorf("issue access link failed: %w", err)
+		}
+		payload, err := writeIssueLinkJSON(result)
+		if err != nil {
+			return fmt.Errorf("encode issue access link result failed: %w", err)
+		}
+		_, _ = os.Stdout.Write(append(payload, '\n'))
+		return nil
+	case "ops:reset-nonprod":
+		if err := ops.resetNonProduction(ctx, os.Getenv("RAHAT_RESET_CONFIRM")); err != nil {
+			return fmt.Errorf("reset failed: %w", err)
+		}
+		ops.logger.Info("non-production reset complete", "database_path", ops.databasePath)
+		return nil
+	default:
+		return fmt.Errorf("unknown ops command: %s", args[1])
+	}
 }

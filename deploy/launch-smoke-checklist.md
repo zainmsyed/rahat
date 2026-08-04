@@ -27,6 +27,7 @@ Run these checks before letting testers rely on the environment. These commands 
 - Send `/edit` from a linked chat and confirm the one-time management link uses the configured public/local host.
 - Click a callback button and verify a `user_response` event is logged.
 - Confirm no Telegram webhook configuration is required for this mode.
+- While the server is running with long polling, run one operator job (`docker exec rahat rahat-api ops:run-job telegram-daily` or `ops:report-events`) and confirm the job completes without `409 getUpdates` errors in the logs.
 
 ## Scheduling
 - Run `docker exec rahat rahat-api ops:run-job schedule-daily` and verify new schedule checkpoints appear for today in the database/logs.

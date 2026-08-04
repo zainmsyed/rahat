@@ -5,10 +5,22 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/rahat/rahat/internal/auth"
+	calendarpkg "github.com/rahat/rahat/internal/calendar"
+	"github.com/rahat/rahat/internal/db"
+	"github.com/rahat/rahat/internal/events"
+	"github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
+	occ "github.com/rahat/rahat/internal/occurrences"
+	"github.com/rahat/rahat/internal/scheduler"
+	"github.com/rahat/rahat/internal/store"
+	"github.com/rahat/rahat/internal/tasks"
+	"github.com/rahat/rahat/internal/tokens"
+	usr "github.com/rahat/rahat/internal/users"
 )
 
 type fakeRuntimeClient struct {
@@ -64,6 +76,53 @@ func TestConfigureTelegramTransportFallsBackToLongPollingWithoutWebhook(t *testi
 	case <-client.updatesCalled:
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected long polling to start getUpdates")
+	}
+}
+
+func TestOpsCommandsDoNotConfigureTelegramTransport(t *testing.T) {
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "rahat.sqlite3")
+	sqlDB, err := db.OpenSQLite(ctx, databasePath)
+	if err != nil {
+		t.Fatalf("OpenSQLite() error = %v", err)
+	}
+	defer sqlDB.Close()
+
+	if _, err := sqlDB.ExecContext(ctx,
+		`INSERT INTO users (id, display_name, timezone, daily_time_budget_minutes, telegram_chat_id, created_at, updated_at)
+		 VALUES ('u1', 'Tester', 'UTC', 45, 'chat-123', '2026-07-25T12:00:00Z', '2026-07-25T12:00:00Z')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	userService := usr.NewService(usr.NewRepository(sqlDB))
+	taskService := tasks.NewService(tasks.NewRepository(sqlDB))
+	occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
+	eventService := events.NewService(events.NewRepository(sqlDB))
+	prefService := preferences.NewService(preferences.NewRepository(sqlDB))
+	checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+	calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+	schedulerService := scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+	calendarConnectionRepo := store.NewCalendarConnectionRepository(sqlDB)
+	oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
+	onboardingConfirmationRepo := store.NewOnboardingConfirmationRepository(sqlDB)
+	calendarService := calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, nil)
+	tokenMgr := tokens.NewManager("test-secret")
+
+	fakeBot := &fakeRuntimeClient{}
+	telegramService := ntg.NewService(fakeBot, userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo)
+	ops := newOpsRuntime(sqlDB, logger, "development", databasePath, userService, taskService, prefService, schedulerService, telegramService, calendarService, eventService, tokenMgr)
+	authRoutes := &authHandler{auth: auth.NewService(sqlDB, auth.NewRepository(sqlDB), "test-session-secret", 30*24*time.Hour), users: userService, webOrigin: "http://localhost:5200", appEnv: "development"}
+
+	if err := runOpsCommand(ctx, ops, authRoutes, []string{"server", "ops:run-job", "telegram-daily"}); err != nil {
+		t.Fatalf("ops:run-job telegram-daily error = %v", err)
+	}
+	if err := runOpsCommand(ctx, ops, authRoutes, []string{"server", "ops:report-events"}); err != nil {
+		t.Fatalf("ops:report-events error = %v", err)
+	}
+
+	if fakeBot.deleteWebhookCalls != 0 || fakeBot.setWebhookCalls != 0 {
+		t.Fatalf("operator commands triggered telegram transport setup: deleteWebhook=%d setWebhook=%d", fakeBot.deleteWebhookCalls, fakeBot.setWebhookCalls)
 	}
 }
 
