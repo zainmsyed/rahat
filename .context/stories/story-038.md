@@ -1,9 +1,9 @@
 # Story 038: Make daily planning idempotent
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** hardening  
 **Created:** 2026-08-03  
-**Last accessed:** 2026-08-03  
+**Last accessed:** 2026-08-04  
 **Completed:** not yet  
 
 ---
@@ -41,19 +41,27 @@ Calling the production daily planner repeatedly for the same user and date resul
 ---
 
 ## Checklist
-- [ ] Reproduce the duplicate occurrence behavior with a regression test for planning the same day twice.
-- [ ] Define the stable open-occurrence identity using user, task, subtask, original scheduled date, and non-terminal status.
-- [ ] Add migration and repository support for unique open-occurrence identity or an equivalent safe upsert.
-- [ ] Update scheduler persistence so scheduled, overflow, and skipped writes do not duplicate existing open records.
-- [ ] Add tests covering reruns, prior-day backlog, overflow, and historical-record preservation.
-- [ ] Run backend scheduler/task/server tests through the available Go container and document results.
+- [x] Reproduce the duplicate occurrence behavior with a regression test for planning the same day twice.
+- [x] Define the stable open-occurrence identity using user, task, subtask, original scheduled date, and non-terminal status.
+- [x] Add migration and repository support for unique open-occurrence identity or an equivalent safe upsert.
+- [x] Update scheduler persistence so scheduled, overflow, and skipped writes do not duplicate existing open records.
+- [x] Add tests covering reruns, prior-day backlog, overflow, and historical-record preservation.
+- [x] Run backend scheduler/task/server tests through the available Go container and document results.
 
 ---
 
 ## Issues
 
 - End-to-end verification on 2026-08-03 showed repeated single-day schedule calls created duplicate Laundry occurrences on the following Monday. This confirms production day planning is not fully idempotent.
+- The pre-existing Story 014 migration fixture did not create the tables required by later migrations. Its minimal bootstrap was expanded within this story's scope so the full migration chain can be tested.
+- `gofmt -l` still reports the pre-existing formatting issue in `cmd/server/schedule_test.go`; it was not changed because it was unrelated to this story's implementation.
 
 ---
 
 ## Completion Summary
+
+Implemented open-occurrence idempotency for production planning. Occurrences now use the stable identity `(user, task, subtask, original scheduled date)` for non-terminal `pending` and `scheduled` rows. Migration 014 removes pre-existing duplicate open rows deterministically and adds a partial unique index, while repository/service save behavior reuses the existing open row before inserting and handles concurrent insert races.
+
+Scheduler persistence now uses the idempotent save path for scheduled, overflow, and skipped results. Added regression coverage for same-day reruns, later-day backlog reuse, and preservation of completed history. Updated the Story 014 migration fixture to include the tables needed by the complete migration chain.
+
+Verification: the full backend suite passes in the Go 1.25 container with `go test ./... -count=1`. Story 038 is implementation-ready for `/complete-story`; final closeout should separately decide whether to address the unrelated pre-existing `cmd/server/schedule_test.go` formatting warning.
