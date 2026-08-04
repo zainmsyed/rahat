@@ -1,9 +1,9 @@
 # Story 039: Add a read-only weekly schedule preview
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** feature/hardening  
 **Created:** 2026-08-03  
-**Last accessed:** 2026-08-03  
+**Last accessed:** 2026-08-04  
 **Completed:** not yet  
 
 ---
@@ -46,19 +46,26 @@ A caller can request a seven-day preview and receive a day-by-day schedule where
 ---
 
 ## Checklist
-- [ ] Add an authenticated or token-scoped weekly preview endpoint based on `PreviewRange` rather than repeated `PlanDay` calls.
-- [ ] Include clear JSON response fields for dates, windows, overflow, skips, reasons, and window budgets.
-- [ ] Add tests that count-cadence weekday/weekend tasks appear on the expected number and type of days.
-- [ ] Add tests that weekly previews do not persist occurrences or checkpoints.
-- [ ] Optionally extend the existing read-only lookahead page from two days to the supported weekly range only if product confirmation is obtained.
-- [ ] Update smoke-check documentation for weekly preview verification.
+- [x] Add an authenticated or token-scoped weekly preview endpoint based on `PreviewRange` rather than repeated `PlanDay` calls.
+- [x] Include clear JSON response fields for dates, windows, overflow, skips, reasons, and window budgets.
+- [x] Add tests that count-cadence weekday/weekend tasks appear on the expected number and type of days.
+- [x] Add tests that weekly previews do not persist occurrences or checkpoints.
+- [x] Leave the existing two-day lookahead page unchanged because product confirmation for a weekly UI extension was not obtained.
+- [x] Update smoke-check documentation for weekly preview verification.
 
 ---
 
 ## Issues
 
 - Manual backend verification on 2026-08-03 used repeated production `PlanDay` calls to inspect a week, which incorrectly treated weekly-count Laundry as due repeatedly and persisted duplicates. A true weekly preview must be read-only and state-carrying.
+- Product confirmation was not obtained for extending the existing two-day lookahead UI, so this story adds the weekly backend contract and documentation without changing the visible page range.
 
 ---
 
 ## Completion Summary
+
+Implemented a token-scoped weekly preview through the existing `PreviewRange` state-carrying scheduler path. `GET /lookahead/plan?token=<token>&days=7` now returns seven day records while preserving the existing two-day default. Responses include range length, dates/labels, window schedules, explicit overflowed and skipped items, reasons, blocked windows, and per-window budgets.
+
+The preview now advances calendar days with `AddDate`, carries planned preview commitments between days, and counts them toward weekly cadence without persisting occurrences or checkpoints. Added coverage for weekday/weekend count cadence, repeated-preview shape stability, zero persistence, unsupported ranges, and existing lookahead behavior. The current lookahead UI remains today/tomorrow-only pending product confirmation; the API and smoke documentation support weekly inspection.
+
+Verification: `go test ./... -count=1`, `npm run check`, and the full frontend suite (24 files / 87 tests) pass. Story 039 is ready for `/complete-story`.
