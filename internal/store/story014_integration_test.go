@@ -4,87 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"testing"
-
-	_ "modernc.org/sqlite"
 )
 
 func TestMigrationResolvesDuplicateTelegramChatIDs(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "rahat.sqlite3")
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=foreign_keys(ON)")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	defer db.Close()
 
-	if _, err := db.ExecContext(ctx, `
-		CREATE TABLE schema_migrations (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE TABLE users (
-			id TEXT PRIMARY KEY,
-			display_name TEXT NOT NULL,
-			timezone TEXT NOT NULL,
-			daily_time_budget_minutes INTEGER NOT NULL,
-			telegram_chat_id TEXT,
-			email TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);
-		CREATE TABLE tasks (id TEXT PRIMARY KEY, user_id TEXT NOT NULL);
-		CREATE TABLE starter_task_templates (id TEXT PRIMARY KEY);
-		CREATE TABLE occurrences (
-			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL,
-			task_id TEXT NOT NULL,
-			subtask_id TEXT,
-			status TEXT NOT NULL,
-			scheduled_for_date TEXT NOT NULL,
-			original_scheduled_for_date TEXT NOT NULL,
-			scheduled_time_of_day TEXT NOT NULL,
-			rollover_count INTEGER NOT NULL DEFAULT 0,
-			consecutive_no_count INTEGER NOT NULL DEFAULT 0,
-			snoozed_until_at TEXT,
-			ready_at TEXT,
-			completed_at TEXT,
-			skipped_at TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);
-		CREATE TABLE event_logs (
-			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL,
-			occurrence_id TEXT,
-			channel TEXT NOT NULL,
-			event_type TEXT NOT NULL,
-			message_type TEXT NOT NULL,
-			payload_json TEXT NOT NULL DEFAULT '{}',
-			occurred_at TEXT NOT NULL
-		);
-	`); err != nil {
-		t.Fatalf("create bootstrap tables: %v", err)
-	}
-
-	for _, name := range []string{
-		"001_story_002_core.sql",
-		"002_story_002_starter_task_library.sql",
-		"003_story_003_schedule_state.sql",
-		"004_story_003_occurrence_ready_at.sql",
-		"005_story_005_calendar.sql",
-		"006_story_005_oauth_state.sql",
-		"007_story_009_subtask_dependency.sql",
-		"008_story_012_beta_auth.sql",
-		"009_story_013_task_archive.sql",
-		"010_story_013_subtask_archive.sql",
-	} {
-		if _, err := db.ExecContext(ctx, `INSERT INTO schema_migrations(name) VALUES (?)`, name); err != nil {
-			t.Fatalf("record migration %s: %v", name, err)
-		}
-	}
+	// Recreate the real schema state immediately before the Story 014 migration,
+	// then seed two users sharing the same Telegram chat ID.
+	db := openTestDBAtMigration(t, "010_story_013_subtask_archive.sql")
 
 	if _, err := db.ExecContext(ctx, `
 		INSERT INTO users (id, display_name, timezone, daily_time_budget_minutes, telegram_chat_id, email, created_at, updated_at)
@@ -94,6 +22,7 @@ func TestMigrationResolvesDuplicateTelegramChatIDs(t *testing.T) {
 		t.Fatalf("seed duplicate users: %v", err)
 	}
 
+	// Apply the remaining migrations through the same path used by the app.
 	if err := ApplyMigrations(ctx, db); err != nil {
 		t.Fatalf("ApplyMigrations() error = %v", err)
 	}

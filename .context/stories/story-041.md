@@ -1,9 +1,9 @@
 # Story 041: Align migration tests with production bootstrap
 
-**Status:** not-started  
+**Status:** in-progress  
 **Type:** test-hardening  
 **Created:** 2026-08-03  
-**Last accessed:** 2026-08-03  
+**Last accessed:** 2026-08-04  
 **Completed:** not yet  
 
 ---
@@ -38,18 +38,28 @@ The full Go test suite passes after new migrations are added. In particular, the
 ---
 
 ## Checklist
-- [ ] Reproduce the Story 014 migration fixture failure against the current migration chain.
-- [ ] Refactor migration tests to start from the real bootstrap schema/migration sequence instead of recording later migrations as pre-applied without their tables.
-- [ ] Add a migration-chain test that validates every migration can apply in order on a clean database.
-- [ ] Keep the duplicate Telegram identity conflict coverage intact.
-- [ ] Run the full Go test suite through the available Go container and document results.
+- [x] Reproduce the Story 014 migration fixture failure against the current migration chain.
+- [x] Refactor migration tests to start from the real bootstrap schema/migration sequence instead of recording later migrations as pre-applied without their tables.
+- [x] Add a migration-chain test that validates every migration can apply in order on a clean database.
+- [x] Keep the duplicate Telegram identity conflict coverage intact.
+- [x] Run the full Go test suite through the available Go container and document results.
 
 ---
 
 ## Issues
 
 - Backend verification on 2026-08-03 failed in `TestMigrationResolvesDuplicateTelegramChatIDs` because the test marked migrations 001–010 as applied but only manually created `users`, causing migration 013 to fail with `no such table: tasks`.
+- **Resolved:** `TestMigrationResolvesDuplicateTelegramChatIDs` now applies migrations 001–010 through the real bootstrap path, seeds duplicate users, and then applies the remaining migrations. The full Go test suite passes in the `golang:1.25` container.
 
 ---
 
 ## Completion Summary
+
+- Added `ApplyMigrationsUpTo` to `internal/store/migrations.go` so tests can stop the migration chain at a specific migration and recreate historical schema states.
+- Introduced shared test helpers in `internal/store/testhelpers_test.go` (`openCleanTestDB`, `openTestDB`, `openTestDBAtMigration`) that mirror the production SQLite bootstrap path (WAL, foreign keys, `schema_migrations` table, then `ApplyMigrations`).
+- Rewrote `internal/store/story014_integration_test.go` to apply migrations 001–010 for real, seed two users with the same Telegram chat ID, and then apply the remaining migrations, preserving the duplicate-conflict assertions.
+- Simplified `internal/store/onboarding_confirmation_test.go` to use the shared `openTestDB` helper, removing its hand-rolled fixture.
+- Added `internal/store/migrations_test.go` with:
+  - `TestMigrationsApplyInOrderOnCleanDatabase` — applies each migration in its own fresh database and verifies it is recorded.
+  - `TestMigrationsAreIdempotent` — applies the full chain twice and confirms all migrations remain recorded.
+- Ran `gofmt`, `go vet ./internal/store/...`, and the full `go test ./...` suite inside the `golang:1.25` container. All packages pass.

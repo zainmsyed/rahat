@@ -2,37 +2,8 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"path/filepath"
 	"testing"
-
-	_ "modernc.org/sqlite"
 )
-
-func openTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "rahat.sqlite3")+"?_pragma=foreign_keys(ON)")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := sqlDB.Ping(); err != nil {
-		t.Fatalf("ping sqlite: %v", err)
-	}
-	if _, err := sqlDB.ExecContext(context.Background(), `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`); err != nil {
-		t.Fatalf("create schema_migrations: %v", err)
-	}
-	if err := ApplyMigrations(context.Background(), sqlDB); err != nil {
-		t.Fatalf("apply migrations: %v", err)
-	}
-	return sqlDB
-}
 
 func TestOnboardingConfirmationRepository(t *testing.T) {
 	ctx := context.Background()
