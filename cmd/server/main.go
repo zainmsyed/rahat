@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"github.com/rahat/rahat/internal/config"
 	"github.com/rahat/rahat/internal/db"
 	"github.com/rahat/rahat/internal/events"
+	"github.com/rahat/rahat/internal/jobs"
 	"github.com/rahat/rahat/internal/netutil"
 	preferences "github.com/rahat/rahat/internal/notifications/preferences"
 	ntg "github.com/rahat/rahat/internal/notifications/telegram"
@@ -92,16 +94,11 @@ func main() {
 
 	// Operator commands share the same service layer but must not configure the
 	// Telegram update transport (long polling or webhook), because Telegram
-	// rejects concurrent getUpdates consumers with 409 errors. Handle these
+	// rejects concurrent getUpdates consumers with 409 errors. They also should
+	// construct only the services required for the invoked command. Handle these
 	// commands before any long-running transport is started.
 	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "ops:") {
-		opsTelegram := buildTelegramServiceForOps(
-			os.Getenv("TELEGRAM_BOT_TOKEN"),
-			os.Getenv("TELEGRAM_API_BASE_URL"),
-			userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo,
-		)
-		ops := newOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath, userService, taskService, prefService, schedulerService, opsTelegram, calendarService, eventService, lookaheadTokens)
-		if err := runOpsCommand(ctx, ops, authRoutes, os.Args); err != nil {
+		if err := runOpsCommandWithMinimalSetup(ctx, cfg, sqlDB, logger, os.Args); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
@@ -379,6 +376,27 @@ func parseDay(value string) time.Time {
 	return parsed.UTC()
 }
 
+// buildLookaheadTokens returns a token manager for operator commands that need
+// to issue read-only lookahead links (e.g., email-recap).
+func buildLookaheadTokens(cfg config.Config) *tokens.Manager {
+	lookaheadSecret := os.Getenv("LOOKAHEAD_TOKEN_SECRET")
+	if lookaheadSecret == "" && cfg.AppEnv == "development" {
+		lookaheadSecret = "development-lookahead-secret"
+	}
+	return tokens.NewManager(lookaheadSecret)
+}
+
+// buildAuthRoutes creates an auth handler for operator commands that need to
+// issue access links.
+func buildAuthRoutes(cfg config.Config, sqlDB *sql.DB, userService *usr.Service) *authHandler {
+	sessionSecret := os.Getenv("WEB_SESSION_SECRET")
+	if sessionSecret == "" && cfg.AppEnv == "development" {
+		sessionSecret = "development-web-session-secret"
+	}
+	authService := auth.NewService(sqlDB, auth.NewRepository(sqlDB), sessionSecret, 30*24*time.Hour)
+	return &authHandler{auth: authService, users: userService, webOrigin: cfg.WebOrigin, appEnv: cfg.AppEnv, devOrigins: devOriginsFor(cfg.WebOrigin)}
+}
+
 // buildTelegramServiceForOps creates a Telegram service suitable for operator
 // jobs. It does not configure or start any update transport; that is reserved
 // for the long-running server path so concurrent getUpdates consumers do not
@@ -389,6 +407,121 @@ func buildTelegramServiceForOps(botToken, botBaseURL string, userService *usr.Se
 	}
 	bot := ntg.NewHTTPBotClient(botToken, botBaseURL)
 	return ntg.NewService(bot, userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo)
+}
+
+// buildOpsRuntimeForJob constructs an ops runtime with only the services
+// required for the named job. It does not start any Telegram transport.
+func buildOpsRuntimeForJob(cfg config.Config, sqlDB *sql.DB, logger *slog.Logger, jobName string) (*opsRuntime, error) {
+	ops := newBaseOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath)
+	switch jobName {
+	case "schedule-daily":
+		userService := usr.NewService(usr.NewRepository(sqlDB))
+		taskService := taskpkg.NewService(taskpkg.NewRepository(sqlDB))
+		occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
+		checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+		calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+		ops.users = userService
+		ops.tasks = taskService
+		ops.scheduler = scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+	case "telegram-daily", "telegram-window":
+		userService := usr.NewService(usr.NewRepository(sqlDB))
+		taskService := taskpkg.NewService(taskpkg.NewRepository(sqlDB))
+		occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
+		eventService := events.NewService(events.NewRepository(sqlDB))
+		onboardingConfirmationRepo := store.NewOnboardingConfirmationRepository(sqlDB)
+		telegramService := buildTelegramServiceForOps(
+			os.Getenv("TELEGRAM_BOT_TOKEN"),
+			os.Getenv("TELEGRAM_API_BASE_URL"),
+			userService, taskService, occurrenceService, eventService, onboardingConfirmationRepo,
+		)
+		if telegramService == nil {
+			return nil, fmt.Errorf("telegram job unavailable: bot service not configured")
+		}
+		ops.users = userService
+		ops.telegram = telegramService
+	case "email-recap":
+		userService := usr.NewService(usr.NewRepository(sqlDB))
+		taskService := taskpkg.NewService(taskpkg.NewRepository(sqlDB))
+		occurrenceService := occ.NewService(occ.NewRepository(sqlDB))
+		eventService := events.NewService(events.NewRepository(sqlDB))
+		prefService := preferences.NewService(preferences.NewRepository(sqlDB))
+		checkpointRepo := store.NewScheduleCheckpointRepository(sqlDB)
+		calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+		ops.users = userService
+		ops.tasks = taskService
+		ops.prefs = prefService
+		ops.scheduler = scheduler.NewService(userService, taskService, occurrenceService, checkpointRepo, calendarBlockRepo)
+		ops.events = eventService
+		ops.tokens = buildLookaheadTokens(cfg)
+	case "calendar-sync":
+		userService := usr.NewService(usr.NewRepository(sqlDB))
+		calendarConnectionRepo := store.NewCalendarConnectionRepository(sqlDB)
+		calendarBlockRepo := store.NewCalendarBlockRepository(sqlDB)
+		oauthStateRepo := store.NewOAuthStateRepository(sqlDB)
+		googleCalendarClient := googcalendar.NewClient(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"), os.Getenv("GOOGLE_CALENDAR_ID"))
+		ops.users = userService
+		ops.calendar = calendarpkg.NewService(userService, calendarConnectionRepo, calendarBlockRepo, oauthStateRepo, googleCalendarClient)
+	case "backup-daily":
+		// backup only needs the database and backup target.
+	default:
+		return nil, fmt.Errorf("job %s is not registered", jobName)
+	}
+	allJobs := opsJobs(ops)
+	var selected []jobs.Job
+	for _, job := range allJobs {
+		if job.Name == jobName {
+			selected = append(selected, job)
+			break
+		}
+	}
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("job %s is not registered", jobName)
+	}
+	ops.jobs = jobs.NewService(selected)
+	return ops, nil
+}
+
+// runOpsCommandWithMinimalSetup dispatches CLI operator commands, constructing
+// only the services required for each command. It must not start any
+// long-running Telegram transport.
+func runOpsCommandWithMinimalSetup(ctx context.Context, cfg config.Config, sqlDB *sql.DB, logger *slog.Logger, args []string) error {
+	switch args[1] {
+	case "ops:run-job":
+		if len(args) < 3 {
+			return fmt.Errorf("missing job name")
+		}
+		ops, err := buildOpsRuntimeForJob(cfg, sqlDB, logger, args[2])
+		if err != nil {
+			return err
+		}
+		return runOpsCommand(ctx, ops, nil, args)
+	case "ops:report-events":
+		ops := newBaseOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath)
+		ops.events = events.NewService(events.NewRepository(sqlDB))
+		return runOpsCommand(ctx, ops, nil, args)
+	case "ops:backup":
+		ops := newBaseOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath)
+		return runOpsCommand(ctx, ops, nil, args)
+	case "ops:seed-testers":
+		ops := newBaseOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath)
+		ops.users = usr.NewService(usr.NewRepository(sqlDB))
+		ops.tasks = taskpkg.NewService(taskpkg.NewRepository(sqlDB))
+		ops.prefs = preferences.NewService(preferences.NewRepository(sqlDB))
+		return runOpsCommand(ctx, ops, nil, args)
+	case "ops:issue-access-link":
+		if len(args) < 3 {
+			return fmt.Errorf("missing user id or email")
+		}
+		userService := usr.NewService(usr.NewRepository(sqlDB))
+		authRoutes := buildAuthRoutes(cfg, sqlDB, userService)
+		ops := newBaseOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath)
+		return runOpsCommand(ctx, ops, authRoutes, args)
+	case "ops:reset-nonprod":
+		ops := newBaseOpsRuntime(sqlDB, logger, cfg.AppEnv, cfg.DatabasePath)
+		return runOpsCommand(ctx, ops, nil, args)
+	default:
+		return fmt.Errorf("unknown ops command: %s", args[1])
+	}
 }
 
 // runOpsCommand dispatches CLI operator commands. It must not start any

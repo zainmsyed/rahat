@@ -1,0 +1,17 @@
+{
+  "note": "Two reusable rules distilled from Story 040 and its review: enforce a single external update consumer across server and CLI processes, and keep CLI command setup minimal.",
+  "candidates": [
+    {
+      "text": "When an external service rejects concurrent consumers (e.g., Telegram getUpdates), ensure exactly one process owns the update transport; CLI/operator jobs must reuse sender-only clients and never start a second polling or webhook loop.",
+      "confidence": "high",
+      "sources": ["story issue", "review finding"],
+      "rationale": "Story 040 was triggered by `409 getUpdates` errors when operator jobs started a second long-polling loop inside the running container. The fix moved CLI dispatch before transport setup and added tests proving no transport methods are invoked. This applies to any integration where concurrent consumers are forbidden."
+    },
+    {
+      "text": "CLI/operator command entry points should construct only the services required for the invoked command instead of the full server service graph.",
+      "confidence": "medium",
+      "sources": ["review finding"],
+      "rationale": "The review noted that the first implementation built the entire service graph for every `ops:` command. Refactoring to per-command minimal setup reduced coupling and startup cost for short-lived CLI tasks. This pattern applies to any CLI tool that shares code with a long-running server."
+    }
+  ]
+}

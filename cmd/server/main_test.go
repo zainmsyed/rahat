@@ -114,15 +114,28 @@ func TestOpsCommandsDoNotConfigureTelegramTransport(t *testing.T) {
 	ops := newOpsRuntime(sqlDB, logger, "development", databasePath, userService, taskService, prefService, schedulerService, telegramService, calendarService, eventService, tokenMgr)
 	authRoutes := &authHandler{auth: auth.NewService(sqlDB, auth.NewRepository(sqlDB), "test-session-secret", 30*24*time.Hour), users: userService, webOrigin: "http://localhost:5200", appEnv: "development"}
 
-	if err := runOpsCommand(ctx, ops, authRoutes, []string{"server", "ops:run-job", "telegram-daily"}); err != nil {
-		t.Fatalf("ops:run-job telegram-daily error = %v", err)
+	commands := [][]string{
+		{"server", "ops:run-job", "telegram-daily"},
+		{"server", "ops:run-job", "telegram-window"},
+		{"server", "ops:report-events"},
+		{"server", "ops:backup"},
+		{"server", "ops:seed-testers"},
 	}
-	if err := runOpsCommand(ctx, ops, authRoutes, []string{"server", "ops:report-events"}); err != nil {
-		t.Fatalf("ops:report-events error = %v", err)
+	for _, args := range commands {
+		if err := runOpsCommand(ctx, ops, authRoutes, args); err != nil {
+			t.Fatalf("%s error = %v", args[1], err)
+		}
 	}
 
 	if fakeBot.deleteWebhookCalls != 0 || fakeBot.setWebhookCalls != 0 {
 		t.Fatalf("operator commands triggered telegram transport setup: deleteWebhook=%d setWebhook=%d", fakeBot.deleteWebhookCalls, fakeBot.setWebhookCalls)
+	}
+}
+
+func TestRunOpsCommandRejectsUnknownCommand(t *testing.T) {
+	ops := &opsRuntime{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if err := runOpsCommand(context.Background(), ops, nil, []string{"server", "ops:unknown"}); err == nil {
+		t.Fatal("expected error for unknown ops command")
 	}
 }
 

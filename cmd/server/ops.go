@@ -58,33 +58,41 @@ type opsUser struct {
 	TelegramChatID string
 }
 
-func newOpsRuntime(sqlDB *sql.DB, logger *slog.Logger, appEnv, databasePath string, usersSvc *usr.Service, taskSvc *taskpkg.Service, prefSvc *preferences.Service, schedulerSvc *scheduler.Service, telegramSvc *ntg.Service, calendarSvc *calendarpkg.Service, eventSvc *events.Service, tokenMgr *tokens.Manager) *opsRuntime {
-	r := &opsRuntime{
+func newBaseOpsRuntime(sqlDB *sql.DB, logger *slog.Logger, appEnv, databasePath string) *opsRuntime {
+	return &opsRuntime{
 		db:           sqlDB,
 		databasePath: databasePath,
 		logger:       logger,
-		users:        usersSvc,
-		tasks:        taskSvc,
-		prefs:        prefSvc,
-		scheduler:    schedulerSvc,
-		telegram:     telegramSvc,
-		calendar:     calendarSvc,
-		events:       eventSvc,
-		tokens:       tokenMgr,
 		outboxDir:    envOrDefault("EMAIL_RECAP_OUTBOX_DIR", "./var/email-outbox"),
 		backupTarget: envOrDefault("BACKUP_TARGET_URI", "./var/backups"),
 		webOrigin:    strings.TrimRight(envOrDefault("WEB_ORIGIN", "http://localhost:5200"), "/"),
 		appEnv:       appEnv,
 		now:          func() time.Time { return time.Now().UTC() },
 	}
-	r.jobs = jobs.NewService([]jobs.Job{
-		{Name: "schedule-daily", Run: func(ctx context.Context) error { return r.runScheduleGeneration(ctx) }},
-		{Name: "telegram-daily", Run: func(ctx context.Context) error { return r.runTelegramDaily(ctx) }},
-		{Name: "telegram-window", Run: func(ctx context.Context) error { return r.runTelegramWindow(ctx) }},
-		{Name: "email-recap", Run: func(ctx context.Context) error { return r.runEmailRecaps(ctx) }},
-		{Name: "calendar-sync", Run: func(ctx context.Context) error { return r.runCalendarSync(ctx) }},
-		{Name: "backup-daily", Run: func(ctx context.Context) error { return r.runBackup(ctx) }},
-	})
+}
+
+func opsJobs(ops *opsRuntime) []jobs.Job {
+	return []jobs.Job{
+		{Name: "schedule-daily", Run: func(ctx context.Context) error { return ops.runScheduleGeneration(ctx) }},
+		{Name: "telegram-daily", Run: func(ctx context.Context) error { return ops.runTelegramDaily(ctx) }},
+		{Name: "telegram-window", Run: func(ctx context.Context) error { return ops.runTelegramWindow(ctx) }},
+		{Name: "email-recap", Run: func(ctx context.Context) error { return ops.runEmailRecaps(ctx) }},
+		{Name: "calendar-sync", Run: func(ctx context.Context) error { return ops.runCalendarSync(ctx) }},
+		{Name: "backup-daily", Run: func(ctx context.Context) error { return ops.runBackup(ctx) }},
+	}
+}
+
+func newOpsRuntime(sqlDB *sql.DB, logger *slog.Logger, appEnv, databasePath string, usersSvc *usr.Service, taskSvc *taskpkg.Service, prefSvc *preferences.Service, schedulerSvc *scheduler.Service, telegramSvc *ntg.Service, calendarSvc *calendarpkg.Service, eventSvc *events.Service, tokenMgr *tokens.Manager) *opsRuntime {
+	r := newBaseOpsRuntime(sqlDB, logger, appEnv, databasePath)
+	r.users = usersSvc
+	r.tasks = taskSvc
+	r.prefs = prefSvc
+	r.scheduler = schedulerSvc
+	r.telegram = telegramSvc
+	r.calendar = calendarSvc
+	r.events = eventSvc
+	r.tokens = tokenMgr
+	r.jobs = jobs.NewService(opsJobs(r))
 	return r
 }
 
