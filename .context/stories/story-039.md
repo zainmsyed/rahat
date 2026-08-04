@@ -4,6 +4,7 @@
 **Type:** feature/hardening  
 **Created:** 2026-08-03  
 **Last accessed:** 2026-08-03  
+**Completed:** not yet  
 
 ---
 
