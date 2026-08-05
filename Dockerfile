@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # --- Stage 1: build the SvelteKit frontend ---
-FROM node:22 AS web-builder
+FROM node:22-alpine AS web-builder
 WORKDIR /app/web
 
 ARG VITE_API_BASE_URL=""
@@ -14,7 +14,7 @@ COPY web/ ./
 RUN npm run build
 
 # --- Stage 2: build the Go backend ---
-FROM golang:1.25 AS go-builder
+FROM golang:1.25-alpine AS go-builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
