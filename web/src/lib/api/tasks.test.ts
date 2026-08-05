@@ -12,7 +12,13 @@ describe('task management api', () => {
 	it('lists, creates, edits, pauses, resumes, and removes tasks with credentials', async () => {
 		fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => [] });
 		await listTasks();
-		expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/tasks'), expect.objectContaining({ credentials: 'include' }));
+		expect(fetchMock).toHaveBeenLastCalledWith(
+			expect.stringContaining('/tasks'),
+			expect.objectContaining({
+				credentials: 'include',
+				headers: expect.objectContaining({ Accept: 'application/json' })
+			})
+		);
 
 		fetchMock.mockResolvedValue({ ok: true, status: 201, json: async () => ({ id: 'task-1', subtasks: [] }) });
 		await createTask({ name: 'Task', description: '', duration_minutes: 10, cadence_type: 'interval', cadence_value: 1, priority: 'medium', time_of_day_preference: 'morning', day_preference: 'any', subtasks: [] });

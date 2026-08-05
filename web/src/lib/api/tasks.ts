@@ -9,7 +9,11 @@ export type ManagedTask = OnboardingTask & {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${apiBaseUrl}${path}`, {
 		credentials: 'include',
-		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'application/json',
+			...(init?.headers ?? {})
+		},
 		...init
 	});
 	if (!response.ok) throw new Error(await response.text());
