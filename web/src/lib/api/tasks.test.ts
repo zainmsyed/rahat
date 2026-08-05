@@ -13,7 +13,7 @@ describe('task management api', () => {
 		fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => [] });
 		await listTasks();
 		expect(fetchMock).toHaveBeenLastCalledWith(
-			expect.stringContaining('/tasks'),
+			expect.stringContaining('/api/tasks'),
 			expect.objectContaining({
 				credentials: 'include',
 				headers: expect.objectContaining({ Accept: 'application/json' })
@@ -26,7 +26,7 @@ describe('task management api', () => {
 
 		fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ id: 'task-1', subtasks: [] }) });
 		await updateTask('task-1', { name: 'Task', description: '', duration_minutes: 10, cadence_type: 'interval', cadence_value: 1, priority: 'medium', time_of_day_preference: 'morning', day_preference: 'any', subtasks: [] });
-		expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/tasks/task-1');
+		expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/api/tasks/task-1');
 
 		await setTaskPaused('task-1', true);
 		expect(fetchMock.mock.calls.at(-1)?.[1]?.body).toBe(JSON.stringify({ paused: true }));

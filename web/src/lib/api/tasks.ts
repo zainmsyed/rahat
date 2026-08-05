@@ -22,26 +22,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function listTasks() {
-	return request<ManagedTask[]>('/tasks');
+	return request<ManagedTask[]>('/api/tasks');
 }
 
 export function createTask(task: TaskDraft) {
-	return request<ManagedTask>('/tasks', { method: 'POST', body: JSON.stringify(task) });
+	return request<ManagedTask>('/api/tasks', { method: 'POST', body: JSON.stringify(task) });
 }
 
 export function updateTask(taskId: string, task: TaskDraft) {
-	return request<ManagedTask>(`/tasks/${encodeURIComponent(taskId)}`, { method: 'PUT', body: JSON.stringify(task) });
+	return request<ManagedTask>(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'PUT', body: JSON.stringify(task) });
 }
 
 export function setTaskPaused(taskId: string, paused: boolean) {
-	return request<ManagedTask>(`/tasks/${encodeURIComponent(taskId)}/pause`, {
+	return request<ManagedTask>(`/api/tasks/${encodeURIComponent(taskId)}/pause`, {
 		method: 'POST',
 		body: JSON.stringify({ paused })
 	});
 }
 
 export function removeTask(taskId: string) {
-	return request<void>(`/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' });
+	return request<void>(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' });
 }
 
 export function toDraft(task: ManagedTask): TaskDraft {

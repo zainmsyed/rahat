@@ -18,11 +18,11 @@ type taskPauseRequest struct {
 }
 
 func (h *taskManagementHandler) register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /tasks", h.handleList)
-	mux.HandleFunc("POST /tasks", h.handleCreate)
-	mux.HandleFunc("PUT /tasks/{taskID}", h.handleUpdate)
-	mux.HandleFunc("POST /tasks/{taskID}/pause", h.handlePause)
-	mux.HandleFunc("DELETE /tasks/{taskID}", h.handleArchive)
+	mux.HandleFunc("GET /api/tasks", h.handleList)
+	mux.HandleFunc("POST /api/tasks", h.handleCreate)
+	mux.HandleFunc("PUT /api/tasks/{taskID}", h.handleUpdate)
+	mux.HandleFunc("POST /api/tasks/{taskID}/pause", h.handlePause)
+	mux.HandleFunc("DELETE /api/tasks/{taskID}", h.handleArchive)
 }
 
 func (h *taskManagementHandler) handleList(w http.ResponseWriter, r *http.Request) {

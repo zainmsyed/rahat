@@ -62,7 +62,7 @@ func TestNewStaticHandler(t *testing.T) {
 	})
 
 	t.Run("passes overlapping routes to API when Accept is JSON", func(t *testing.T) {
-		for _, p := range []string{"/tasks", "/onboarding/telegram"} {
+		for _, p := range []string{"/onboarding/telegram"} {
 			req := httptest.NewRequest(http.MethodGet, p, nil)
 			req.Header.Set("Accept", "application/json")
 			rr := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestNewStaticHandler(t *testing.T) {
 	})
 
 	t.Run("passes API paths to next handler", func(t *testing.T) {
-		for _, p := range []string{"/healthz", "/readyz", "/auth/session", "/lookahead/plan"} {
+		for _, p := range []string{"/healthz", "/readyz", "/auth/session", "/api/tasks", "/lookahead/plan"} {
 			req := httptest.NewRequest(http.MethodGet, p, nil)
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
